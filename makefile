@@ -38,7 +38,7 @@ undeploy:
 
 # Configurações do Servico
 # ----------------------------
-SERVICE_NAME=chatgpt
+SERVICE_NAME=RFID
 
 service-reload:
 	sudo systemctl daemon-reload
