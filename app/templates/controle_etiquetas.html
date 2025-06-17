@@ -590,7 +590,7 @@
                     ...filtros
                 });
                 
-                const response = await fetch(`/controlerfid/api/etiquetas?${params}`);
+                const response = await fetch(`/api/etiquetas?${params}`);
                 const data = await response.json();
                 
                 if (data.success) {
@@ -634,7 +634,7 @@
         
         async function atualizarEstatisticas() {
             try {
-                const response = await fetch('/controlerfid/api/estatisticas');
+                const response = await fetch('/api/estatisticas');
                 const data = await response.json();
                 
                 if (data.success) {
