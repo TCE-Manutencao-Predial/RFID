@@ -21,3 +21,4 @@ tqdm==4.66.5
 typing_extensions==4.12.2
 waitress==3.0.0
 Werkzeug==3.0.4
+mysql-connector-python
