@@ -1,5 +1,5 @@
 # app/__init__.py
-from flask import Flask, redirect, render_template
+from flask import Flask, redirect, render_template, url_for
 from .routes.web import web_bp
 from .routes.api_etiquetas import api_bp
 from .config import ROUTES_PREFIX, setup_logging
@@ -44,7 +44,8 @@ def create_app():
     app.register_blueprint(api_bp, url_prefix=f'{ROUTES_PREFIX}/api')
 
     @app.route('/')
-    def index_redirect_route():
-        return redirect('/RFID')
+    def index():
+        """Página inicial - redireciona para controle de etiquetas."""
+        return redirect(url_for('web.controle_etiquetas'))
 
     return app
