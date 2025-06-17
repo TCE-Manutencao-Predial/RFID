@@ -1,0 +1,13 @@
+[Unit]
+Description=RFID Service
+
+[Service]
+User=root
+WorkingDirectory=/var/softwaresTCE/RFID
+ExecStart=/var/softwaresTCE/RFID/scripts/run.sh
+EnvironmentFile=/etc/environment
+Restart=always
+RestartSec=3600
+
+[Install]
+WantedBy=multi-user.target
