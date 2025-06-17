@@ -3,7 +3,7 @@ from flask import Blueprint, jsonify, request, current_app
 import logging
 
 api_bp = Blueprint('api', __name__)
-logger = logging.getLogger('controlerfid.api')
+logger = logging.getLogger('RFID.api')
 
 @api_bp.route('/etiquetas', methods=['GET'])
 def listar_etiquetas():
