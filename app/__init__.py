@@ -1,27 +1,50 @@
-from flask import Flask
+# app/__init__.py
+from flask import Flask, redirect, render_template
+from .routes.web import web_bp
+from .routes.api_etiquetas import api_bp
+from .config import ROUTES_PREFIX, setup_logging
+import atexit
+import logging
 
-app = Flask(__name__)
+# Configurar logging
+rfid_logger = setup_logging()
 
-from app.logging_config import configure_logging
-# Importa a função configure_logging do módulo logging_config dentro do pacote app.
+def create_app():
+    app = Flask(__name__, static_url_path=ROUTES_PREFIX)
+    app.config['SECRET_KEY'] = '123rfid'
+    
+    # Inicializa gerenciador de etiquetas RFID
+    try:
+        from .utils.GerenciadorEtiquetasRFID import GerenciadorEtiquetasRFID
+        app.config['GERENCIADOR_RFID'] = GerenciadorEtiquetasRFID.get_instance()
+        rfid_logger.info("Gerenciador de etiquetas RFID iniciado")
+    except Exception as e:
+        rfid_logger.error(f"Erro ao inicializar gerenciador RFID: {e}")
+        app.config['GERENCIADOR_RFID'] = None
 
-configure_logging()
-# Chama a função configure_logging para configurar o sistema de logging da aplicação.
+    # Handlers de erro
+    @app.errorhandler(404)
+    def not_found_error(error):
+        try:
+            return render_template('erro_pagina_nao_encontrada.html')
+        except:
+            return "Página não encontrada", 404
+    
+    @app.errorhandler(500)
+    def internal_error(error):
+        rfid_logger.error(f"Erro interno: {error}")
+        try:
+            return render_template('erro_interno.html'), 500
+        except:
+            return "Erro interno do servidor", 500
 
-from app import routes
-from app import main
+    # Rotas
+    app.static_url_path = ROUTES_PREFIX
+    app.register_blueprint(web_bp, url_prefix=f'{ROUTES_PREFIX}/')
+    app.register_blueprint(api_bp, url_prefix=f'{ROUTES_PREFIX}/api')
 
+    @app.route('/')
+    def index_redirect_route():
+        return redirect('/RFID')
 
-# Thread que executa a main a cada 2 horas
-def loop():
-    from time import sleep
-    tempo = 4*60*60 # segundos
-
-    while True:
-        main.main()
-        sleep(tempo)
-
-import threading
-threading.Thread(target=loop).start()
-
-# Comentario para teste do autoupdate :3
+    return app
