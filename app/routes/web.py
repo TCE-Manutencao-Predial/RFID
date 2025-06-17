@@ -1,14 +1,9 @@
 # app/routes/web.py
-from flask import Blueprint, render_template, redirect, url_for, current_app
+from flask import Blueprint, render_template, current_app
 import logging
 
 web_bp = Blueprint('web', __name__)
 logger = logging.getLogger('controlerfid.web')
-
-@web_bp.route('/')
-def index():
-    """Página inicial - redireciona para controle de etiquetas."""
-    return redirect(url_for('web.controle_etiquetas'))
 
 @web_bp.route('/etiquetas')
 def controle_etiquetas():

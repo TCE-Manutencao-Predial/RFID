@@ -1,9 +1,8 @@
 # app/__init__.py
-from flask import Flask, redirect, render_template, url_for, current_app
+from flask import Flask, redirect, render_template, url_for
 from .routes.web import web_bp
 from .routes.api_etiquetas import api_bp
-from .config import ROUTES_PREFIX, setup_logging
-import atexit
+from .config import setup_logging
 import logging
 
 # Configurar logging
@@ -38,27 +37,13 @@ def create_app():
         except:
             return "Erro interno do servidor", 500
 
-    # Registrar blueprints sem prefixo
+    # Registrar blueprints
     app.register_blueprint(web_bp)
     app.register_blueprint(api_bp, url_prefix='/api')
 
     @app.route('/')
     def index():
-        """Página inicial - mostra controle de etiquetas diretamente."""
-        try:
-            gerenciador = app.config.get('GERENCIADOR_RFID')
-            if not gerenciador:
-                rfid_logger.error("Gerenciador RFID não inicializado")
-                return render_template('erro_interno.html'), 500
-            
-            # Obter estatísticas
-            stats_result = gerenciador.obter_estatisticas()
-            estatisticas = stats_result.get('estatisticas', {})
-            
-            return render_template('controle_etiquetas.html', estatisticas=estatisticas)
-        
-        except Exception as e:
-            rfid_logger.error(f"Erro ao carregar página de etiquetas: {e}")
-            return render_template('erro_interno.html'), 500
+        """Página inicial - redireciona para controle de etiquetas."""
+        return redirect(url_for('web.controle_etiquetas'))
 
     return app
