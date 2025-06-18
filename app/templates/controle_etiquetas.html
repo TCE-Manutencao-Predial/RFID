@@ -75,6 +75,114 @@
             opacity: 0.9 !important;
         }
         
+        /* Toast System */
+        .toast-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        
+        .toast {
+            background: white;
+            padding: 16px 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            min-width: 300px;
+            max-width: 500px;
+            animation: slideIn 0.3s ease-out;
+            cursor: pointer;
+        }
+        
+        .toast.success {
+            border-left: 4px solid var(--rfid-success);
+        }
+        
+        .toast.error {
+            border-left: 4px solid var(--rfid-danger);
+        }
+        
+        .toast.warning {
+            border-left: 4px solid var(--rfid-warning);
+        }
+        
+        .toast.info {
+            border-left: 4px solid var(--rfid-info);
+        }
+        
+        .toast-icon {
+            font-size: 1.5rem;
+        }
+        
+        .toast.success .toast-icon {
+            color: var(--rfid-success);
+        }
+        
+        .toast.error .toast-icon {
+            color: var(--rfid-danger);
+        }
+        
+        .toast.warning .toast-icon {
+            color: var(--rfid-warning);
+        }
+        
+        .toast.info .toast-icon {
+            color: var(--rfid-info);
+        }
+        
+        .toast-content {
+            flex: 1;
+        }
+        
+        .toast-title {
+            font-weight: 600;
+            margin-bottom: 2px;
+            color: var(--rfid-dark);
+        }
+        
+        .toast-message {
+            font-size: 0.9rem;
+            color: #6c757d;
+        }
+        
+        .toast-close {
+            background: none;
+            border: none;
+            font-size: 1.2rem;
+            color: #6c757d;
+            cursor: pointer;
+            padding: 0;
+            margin-left: 10px;
+        }
+        
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+        
+        @keyframes slideOut {
+            from {
+                transform: translateX(0);
+                opacity: 1;
+            }
+            to {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+        }
+        
         /* Header da Página */
         .rfid-page-header {
             background: white;
@@ -407,10 +515,23 @@
             .rfid-table td {
                 padding: 10px;
             }
+            
+            .toast-container {
+                left: 10px;
+                right: 10px;
+            }
+            
+            .toast {
+                min-width: unset;
+                max-width: unset;
+            }
         }
     </style>
 </head>
 <body class="rfid-custom-layout">
+    <!-- Container de Toast -->
+    <div class="toast-container" id="toastContainer"></div>
+
     <!-- Header Customizado -->
     <div class="rfid-custom-header">
         <nav class="rfid-custom-nav">
@@ -551,6 +672,52 @@
         const registrosPorPagina = 20;
         let totalRegistros = 0;
         
+        // Sistema de Toast
+        function showToast(message, type = 'info', title = '') {
+            const toastContainer = document.getElementById('toastContainer');
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            
+            const icons = {
+                success: 'fa-check-circle',
+                error: 'fa-exclamation-circle',
+                warning: 'fa-exclamation-triangle',
+                info: 'fa-info-circle'
+            };
+            
+            const titles = {
+                success: 'Sucesso',
+                error: 'Erro',
+                warning: 'Aviso',
+                info: 'Informação'
+            };
+            
+            toast.innerHTML = `
+                <i class="fas ${icons[type]} toast-icon"></i>
+                <div class="toast-content">
+                    <div class="toast-title">${title || titles[type]}</div>
+                    <div class="toast-message">${message}</div>
+                </div>
+                <button class="toast-close" onclick="this.parentElement.remove()">
+                    <i class="fas fa-times"></i>
+                </button>
+            `;
+            
+            toastContainer.appendChild(toast);
+            
+            // Auto-remover após 5 segundos
+            setTimeout(() => {
+                toast.style.animation = 'slideOut 0.3s ease-out';
+                setTimeout(() => toast.remove(), 300);
+            }, 5000);
+            
+            // Remover ao clicar
+            toast.addEventListener('click', () => {
+                toast.style.animation = 'slideOut 0.3s ease-out';
+                setTimeout(() => toast.remove(), 300);
+            });
+        }
+        
         // Inicialização
         document.addEventListener('DOMContentLoaded', function() {
             inicializarEventos();
@@ -590,20 +757,43 @@
                     ...filtros
                 });
                 
-                const response = await fetch(`/api/etiquetas?${params}`);
+                // IMPORTANTE: URL corrigida com /RFID/api
+                const response = await fetch(`/RFID/api/etiquetas?${params}`);
+                
+                if (!response.ok) {
+                    throw new Error(`Erro HTTP: ${response.status}`);
+                }
+                
                 const data = await response.json();
                 
                 if (data.success) {
                     totalRegistros = data.total;
                     renderizarTabela(data.etiquetas);
                     atualizarPaginacao();
+                    
+                    // Mostrar toast de sucesso se houver registros
+                    if (data.etiquetas.length > 0) {
+                        showToast(`${data.etiquetas.length} etiquetas carregadas`, 'success');
+                    }
                 } else {
                     throw new Error(data.error || 'Erro ao carregar dados');
                 }
                 
             } catch (error) {
                 console.error('Erro:', error);
-                mostrarErro('Erro ao carregar os dados');
+                
+                // Mensagem de erro mais detalhada
+                let errorMessage = 'Erro ao carregar os dados';
+                if (error.message.includes('404')) {
+                    errorMessage = 'API não encontrada. Verifique se o servidor está rodando.';
+                } else if (error.message.includes('NetworkError')) {
+                    errorMessage = 'Erro de conexão. Verifique sua internet.';
+                } else if (error.message) {
+                    errorMessage = error.message;
+                }
+                
+                mostrarErro(errorMessage);
+                showToast(errorMessage, 'error');
             }
         }
         
@@ -628,13 +818,20 @@
         }
         
         function atualizarDados() {
+            showToast('Atualizando dados...', 'info');
             carregarDados();
             atualizarEstatisticas();
         }
         
         async function atualizarEstatisticas() {
             try {
-                const response = await fetch('/api/estatisticas');
+                // IMPORTANTE: URL corrigida com /RFID/api
+                const response = await fetch('/RFID/api/estatisticas');
+                
+                if (!response.ok) {
+                    throw new Error(`Erro HTTP: ${response.status}`);
+                }
+                
                 const data = await response.json();
                 
                 if (data.success) {
@@ -646,6 +843,7 @@
                 }
             } catch (error) {
                 console.error('Erro ao atualizar estatísticas:', error);
+                showToast('Erro ao atualizar estatísticas', 'error');
             }
         }
         
@@ -771,8 +969,7 @@
         }
         
         function exportarDados() {
-            // Implementar exportação futura
-            alert('Funcionalidade de exportação será implementada em breve!');
+            showToast('Funcionalidade de exportação será implementada em breve!', 'info');
         }
     </script>
 </body>
