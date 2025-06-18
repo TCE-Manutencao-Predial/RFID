@@ -2,11 +2,13 @@
 import mysql.connector
 from mysql.connector import Error
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from ..config import MYSQL_CONFIG
+import json
+import hashlib
 
 class GerenciadorEtiquetasRFID:
-    """Gerenciador para operações com etiquetas RFID no MySQL."""
+    """Gerenciador para operações com etiquetas RFID no MySQL com sistema de cache."""
     
     _instance = None
     
@@ -24,7 +26,44 @@ class GerenciadorEtiquetasRFID:
         
         self.logger = logging.getLogger('controlerfid.gerenciador')
         self.config = MYSQL_CONFIG
-        self.logger.info("Gerenciador de Etiquetas RFID inicializado")
+        
+        # Sistema de cache
+        self.cache = {}
+        self.cache_timeout = timedelta(minutes=5)  # Cache válido por 5 minutos
+        
+        self.logger.info("Gerenciador de Etiquetas RFID inicializado com cache")
+    
+    def _get_cache_key(self, prefix, params=None):
+        """Gera uma chave única para o cache baseada nos parâmetros."""
+        if params:
+            # Criar hash dos parâmetros para a chave
+            params_str = json.dumps(params, sort_keys=True)
+            params_hash = hashlib.md5(params_str.encode()).hexdigest()
+            return f"{prefix}_{params_hash}"
+        return prefix
+    
+    def _get_from_cache(self, key):
+        """Obtém dados do cache se ainda válidos."""
+        if key in self.cache:
+            cached_data, timestamp = self.cache[key]
+            if datetime.now() - timestamp < self.cache_timeout:
+                self.logger.debug(f"Cache hit para key: {key}")
+                return cached_data
+            else:
+                # Cache expirado, remover
+                del self.cache[key]
+                self.logger.debug(f"Cache expirado para key: {key}")
+        return None
+    
+    def _set_cache(self, key, data):
+        """Armazena dados no cache."""
+        self.cache[key] = (data, datetime.now())
+        self.logger.debug(f"Dados armazenados no cache para key: {key}")
+    
+    def limpar_cache(self):
+        """Limpa todo o cache."""
+        self.cache.clear()
+        self.logger.info("Cache limpo")
     
     def _get_connection(self):
         """Cria e retorna uma conexão com o MySQL."""
@@ -35,14 +74,14 @@ class GerenciadorEtiquetasRFID:
                 user=self.config['user'],
                 password=self.config['password'],
                 connection_timeout=self.config['connection_timeout'],
-                autocommit=True  # Importante para evitar problemas de transação
+                autocommit=True
             )
             return connection
         except Error as e:
             self.logger.error(f"Erro ao conectar ao MySQL: {e}")
             raise
     
-    def obter_etiquetas(self, filtros=None, limite=100, offset=0):
+    def obter_etiquetas(self, filtros=None, limite=100, offset=0, force_refresh=False):
         """
         Obtém lista de etiquetas com filtros opcionais.
         
@@ -50,10 +89,25 @@ class GerenciadorEtiquetasRFID:
             filtros (dict): Dicionário com filtros (etiqueta, descricao, destruida)
             limite (int): Número máximo de registros
             offset (int): Deslocamento para paginação
+            force_refresh (bool): Força atualização ignorando o cache
             
         Returns:
             dict: Resultado com etiquetas e total
         """
+        # Gerar chave do cache
+        cache_params = {
+            'filtros': filtros or {},
+            'limite': limite,
+            'offset': offset
+        }
+        cache_key = self._get_cache_key('etiquetas', cache_params)
+        
+        # Verificar cache primeiro (a menos que force_refresh seja True)
+        if not force_refresh:
+            cached_result = self._get_from_cache(cache_key)
+            if cached_result:
+                return cached_result
+        
         total = 0
         etiquetas = []
         
@@ -133,13 +187,19 @@ class GerenciadorEtiquetasRFID:
                 if connection2:
                     connection2.close()
             
-            return {
+            result = {
                 'success': True,
                 'etiquetas': etiquetas,
                 'total': total,
                 'limite': limite,
-                'offset': offset
+                'offset': offset,
+                'from_cache': False
             }
+            
+            # Armazenar no cache
+            self._set_cache(cache_key, result)
+            
+            return result
             
         except Exception as e:
             self.logger.error(f"Erro ao obter etiquetas: {e}")
@@ -147,7 +207,8 @@ class GerenciadorEtiquetasRFID:
                 'success': False,
                 'error': str(e),
                 'etiquetas': [],
-                'total': 0
+                'total': 0,
+                'from_cache': False
             }
     
     def obter_etiqueta_por_id(self, id_etiqueta):
@@ -160,6 +221,12 @@ class GerenciadorEtiquetasRFID:
         Returns:
             dict: Dados da etiqueta ou None
         """
+        # Verificar cache primeiro
+        cache_key = self._get_cache_key(f'etiqueta_{id_etiqueta}')
+        cached_result = self._get_from_cache(cache_key)
+        if cached_result:
+            return cached_result
+        
         connection = None
         cursor = None
         
@@ -180,6 +247,10 @@ class GerenciadorEtiquetasRFID:
             
             cursor.execute(query, (id_etiqueta,))
             etiqueta = cursor.fetchone()
+            
+            # Armazenar no cache se encontrado
+            if etiqueta:
+                self._set_cache(cache_key, etiqueta)
             
             return etiqueta
             
@@ -233,6 +304,9 @@ class GerenciadorEtiquetasRFID:
             
             cursor.execute(query, valores)
             
+            # Limpar cache após atualização
+            self.limpar_cache()
+            
             return {
                 'success': True,
                 'message': 'Etiqueta atualizada com sucesso',
@@ -251,13 +325,25 @@ class GerenciadorEtiquetasRFID:
             if connection:
                 connection.close()
     
-    def obter_estatisticas(self):
+    def obter_estatisticas(self, force_refresh=False):
         """
         Obtém estatísticas gerais das etiquetas.
         
+        Args:
+            force_refresh (bool): Força atualização ignorando o cache
+            
         Returns:
             dict: Estatísticas
         """
+        cache_key = 'estatisticas'
+        
+        # Verificar cache primeiro
+        if not force_refresh:
+            cached_result = self._get_from_cache(cache_key)
+            if cached_result:
+                cached_result['from_cache'] = True
+                return cached_result
+        
         try:
             total = 0
             destruidas = 0
@@ -299,15 +385,21 @@ class GerenciadorEtiquetasRFID:
             # Calcular ativas
             ativas = total - destruidas
             
-            return {
+            result = {
                 'success': True,
                 'estatisticas': {
                     'total': total,
                     'ativas': ativas,
                     'destruidas': destruidas,
                     'percentual_ativas': round((ativas / total * 100) if total > 0 else 0, 2)
-                }
+                },
+                'from_cache': False
             }
+            
+            # Armazenar no cache
+            self._set_cache(cache_key, result)
+            
+            return result
             
         except Exception as e:
             self.logger.error(f"Erro ao obter estatísticas: {e}")
@@ -319,5 +411,6 @@ class GerenciadorEtiquetasRFID:
                     'ativas': 0,
                     'destruidas': 0,
                     'percentual_ativas': 0
-                }
+                },
+                'from_cache': False
             }

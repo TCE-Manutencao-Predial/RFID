@@ -52,13 +52,17 @@ def listar_etiquetas():
             except ValueError:
                 logger.error(f"Valor inválido para destruida: {request.args.get('destruida')}")
         
-        logger.info(f"Buscando etiquetas com filtros: {filtros}, limite: {limite}, offset: {offset}")
+        # Verificar se é uma atualização forçada
+        force_refresh = request.args.get('force_refresh', '').lower() == 'true'
+        
+        logger.info(f"Buscando etiquetas com filtros: {filtros}, limite: {limite}, offset: {offset}, force_refresh: {force_refresh}")
         
         # Buscar etiquetas
         resultado = gerenciador.obter_etiquetas(
             filtros=filtros,
             limite=limite,
-            offset=offset
+            offset=offset,
+            force_refresh=force_refresh
         )
         
         if not resultado.get('success', False):
@@ -163,7 +167,10 @@ def obter_estatisticas():
                 'error': 'Gerenciador não inicializado'
             }), 500
         
-        resultado = gerenciador.obter_estatisticas()
+        # Verificar se é uma atualização forçada
+        force_refresh = request.args.get('force_refresh', '').lower() == 'true'
+        
+        resultado = gerenciador.obter_estatisticas(force_refresh=force_refresh)
         
         if not resultado.get('success', False):
             logger.error(f"Erro ao obter estatísticas: {resultado.get('error', 'Erro desconhecido')}")

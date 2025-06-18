@@ -743,7 +743,7 @@
             };
         }
         
-        async function carregarDados() {
+        async function carregarDados(forceRefresh = false, showToastMessage = false) {
             mostrarLoading();
             let response = null; // Declarar response no escopo da função
             
@@ -757,6 +757,11 @@
                     offset: offset,
                     ...filtros
                 });
+                
+                // Adicionar force_refresh se necessário
+                if (forceRefresh) {
+                    params.append('force_refresh', 'true');
+                }
                 
                 // IMPORTANTE: URL corrigida com /RFID/api
                 response = await fetch(`/RFID/api/etiquetas?${params}`);
@@ -772,9 +777,10 @@
                     renderizarTabela(data.etiquetas);
                     atualizarPaginacao();
                     
-                    // Mostrar toast de sucesso se houver registros
-                    if (data.etiquetas.length > 0) {
-                        showToast(`${data.etiquetas.length} etiquetas carregadas`, 'success');
+                    // Mostrar toast apenas quando solicitado (atualização manual)
+                    if (showToastMessage && data.etiquetas.length > 0) {
+                        const cacheInfo = data.from_cache ? ' (do cache)' : ' (atualizado)';
+                        showToast(`${data.etiquetas.length} etiquetas carregadas${cacheInfo}`, 'success');
                     }
                 } else {
                     throw new Error(data.error || 'Erro ao carregar dados');
@@ -834,15 +840,21 @@
         }
         
         function atualizarDados() {
-            showToast('Atualizando dados...', 'info');
-            carregarDados();
-            atualizarEstatisticas();
+            showToast('Atualizando dados do servidor...', 'info');
+            // Forçar atualização do servidor, ignorando cache
+            carregarDados(true, true);
+            atualizarEstatisticas(true);
         }
         
-        async function atualizarEstatisticas() {
+        async function atualizarEstatisticas(forceRefresh = false) {
             try {
-                // IMPORTANTE: URL corrigida com /RFID/api
-                const response = await fetch('/RFID/api/estatisticas');
+                // Construir URL com parâmetro de força refresh se necessário
+                let url = '/RFID/api/estatisticas';
+                if (forceRefresh) {
+                    url += '?force_refresh=true';
+                }
+                
+                const response = await fetch(url);
                 
                 if (!response.ok) {
                     throw new Error(`Erro HTTP: ${response.status}`);
@@ -856,10 +868,15 @@
                     document.getElementById('etiquetasAtivas').textContent = stats.ativas || 0;
                     document.getElementById('etiquetasDestruidas').textContent = stats.destruidas || 0;
                     document.getElementById('percentualAtivas').textContent = (stats.percentual_ativas || 0) + '%';
+                    
+                    // Mostrar informação de cache apenas em modo debug
+                    if (forceRefresh && data.from_cache === false) {
+                        console.log('Estatísticas atualizadas do servidor');
+                    }
                 }
             } catch (error) {
                 console.error('Erro ao atualizar estatísticas:', error);
-                showToast('Erro ao atualizar estatísticas', 'error');
+                // Não mostrar toast para erros de estatísticas, apenas log
             }
         }
         
@@ -917,7 +934,7 @@
             // Botão Anterior
             const btnAnterior = criarBotaoPagina('Anterior', paginaAtual > 1, () => {
                 paginaAtual--;
-                carregarDados();
+                carregarDados(); // Sem toast na paginação
             });
             controles.appendChild(btnAnterior);
             
@@ -933,7 +950,7 @@
             for (let i = inicioPag; i <= fimPag; i++) {
                 const btn = criarBotaoPagina(i, true, () => {
                     paginaAtual = i;
-                    carregarDados();
+                    carregarDados(); // Sem toast na paginação
                 });
                 
                 if (i === paginaAtual) {
@@ -946,7 +963,7 @@
             // Botão Próximo
             const btnProximo = criarBotaoPagina('Próximo', paginaAtual < totalPaginas, () => {
                 paginaAtual++;
-                carregarDados();
+                carregarDados(); // Sem toast na paginação
             });
             controles.appendChild(btnProximo);
         }
