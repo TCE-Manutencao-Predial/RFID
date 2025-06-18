@@ -745,6 +745,7 @@
         
         async function carregarDados() {
             mostrarLoading();
+            let response = null; // Declarar response no escopo da função
             
             try {
                 const offset = (paginaAtual - 1) * registrosPorPagina;
@@ -758,7 +759,7 @@
                 });
                 
                 // IMPORTANTE: URL corrigida com /RFID/api
-                const response = await fetch(`/RFID/api/etiquetas?${params}`);
+                response = await fetch(`/RFID/api/etiquetas?${params}`);
                 
                 if (!response.ok) {
                     throw new Error(`Erro HTTP: ${response.status}`);

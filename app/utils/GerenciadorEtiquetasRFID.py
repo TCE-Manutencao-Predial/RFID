@@ -86,18 +86,22 @@ class GerenciadorEtiquetasRFID:
                     query += " AND Destruida = %s"
                     params.append(filtros['destruida'])
             
-            # Query para contar total
-            count_query = query.replace("SELECT id_listaEtiquetasRFID, EtiquetaRFID_hex, Descricao, Destruida", "SELECT COUNT(*) as total")
+            # PRIMEIRO: Obter o total usando um cursor separado
+            count_cursor = connection.cursor(dictionary=True)
+            count_query = query.replace(
+                "SELECT id_listaEtiquetasRFID, EtiquetaRFID_hex, Descricao, Destruida", 
+                "SELECT COUNT(*) as total"
+            )
             
-            # Obter total
-            cursor.execute(count_query, params)
-            total = cursor.fetchone()['total']
+            count_cursor.execute(count_query, params)
+            result = count_cursor.fetchone()
+            total = result['total'] if result else 0
+            count_cursor.close()  # Fechar o cursor de contagem
             
-            # Adicionar limite e offset
+            # SEGUNDO: Obter os registros com limite e offset
             query += " ORDER BY id_listaEtiquetasRFID DESC LIMIT %s OFFSET %s"
             params.extend([limite, offset])
             
-            # Executar query principal
             cursor.execute(query, params)
             etiquetas = cursor.fetchall()
             
@@ -243,11 +247,16 @@ class GerenciadorEtiquetasRFID:
             
             # Total de etiquetas
             cursor.execute("SELECT COUNT(*) as total FROM etiquetasRFID")
-            total = cursor.fetchone()['total']
+            result = cursor.fetchone()
+            total = result['total'] if result else 0
+            
+            # Limpar o cursor antes da próxima query
+            cursor.fetchall()  # Garantir que todos os resultados foram lidos
             
             # Total de etiquetas destruídas
             cursor.execute("SELECT COUNT(*) as destruidas FROM etiquetasRFID WHERE Destruida = 1")
-            destruidas = cursor.fetchone()['destruidas']
+            result = cursor.fetchone()
+            destruidas = result['destruidas'] if result else 0
             
             # Total de etiquetas ativas
             ativas = total - destruidas
