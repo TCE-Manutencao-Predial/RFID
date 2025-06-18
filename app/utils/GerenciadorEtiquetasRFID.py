@@ -34,7 +34,8 @@ class GerenciadorEtiquetasRFID:
                 database=self.config['database'],
                 user=self.config['user'],
                 password=self.config['password'],
-                connection_timeout=self.config['connection_timeout']
+                connection_timeout=self.config['connection_timeout'],
+                autocommit=True  # Importante para evitar problemas de transação
             )
             return connection
         except Error as e:
@@ -53,57 +54,84 @@ class GerenciadorEtiquetasRFID:
         Returns:
             dict: Resultado com etiquetas e total
         """
-        connection = None
-        cursor = None
+        total = 0
+        etiquetas = []
         
         try:
-            connection = self._get_connection()
-            cursor = connection.cursor(dictionary=True)
-            
-            # Query base
-            query = """
-                SELECT 
-                    id_listaEtiquetasRFID,
-                    EtiquetaRFID_hex,
-                    Descricao,
-                    Destruida
-                FROM etiquetasRFID
-                WHERE 1=1
-            """
+            # Construir query base
+            where_conditions = []
             params = []
             
-            # Aplicar filtros
             if filtros:
                 if filtros.get('etiqueta'):
-                    query += " AND EtiquetaRFID_hex LIKE %s"
+                    where_conditions.append("EtiquetaRFID_hex LIKE %s")
                     params.append(f"%{filtros['etiqueta']}%")
                 
                 if filtros.get('descricao'):
-                    query += " AND Descricao LIKE %s"
+                    where_conditions.append("Descricao LIKE %s")
                     params.append(f"%{filtros['descricao']}%")
                 
                 if filtros.get('destruida') is not None:
-                    query += " AND Destruida = %s"
+                    where_conditions.append("Destruida = %s")
                     params.append(filtros['destruida'])
             
-            # PRIMEIRO: Obter o total usando um cursor separado
-            count_cursor = connection.cursor(dictionary=True)
-            count_query = query.replace(
-                "SELECT id_listaEtiquetasRFID, EtiquetaRFID_hex, Descricao, Destruida", 
-                "SELECT COUNT(*) as total"
-            )
+            where_clause = " AND ".join(where_conditions) if where_conditions else "1=1"
             
-            count_cursor.execute(count_query, params)
-            result = count_cursor.fetchone()
-            total = result['total'] if result else 0
-            count_cursor.close()  # Fechar o cursor de contagem
+            # PRIMEIRA CONEXÃO: Obter o total
+            connection1 = None
+            cursor1 = None
+            try:
+                connection1 = self._get_connection()
+                cursor1 = connection1.cursor(dictionary=True)
+                
+                count_query = f"SELECT COUNT(*) as total FROM etiquetasRFID WHERE {where_clause}"
+                cursor1.execute(count_query, params)
+                result = cursor1.fetchone()
+                total = result['total'] if result and 'total' in result else 0
+                
+            except Exception as e:
+                self.logger.error(f"Erro ao contar registros: {e}")
+                raise
+            finally:
+                if cursor1:
+                    cursor1.close()
+                if connection1:
+                    connection1.close()
             
-            # SEGUNDO: Obter os registros com limite e offset
-            query += " ORDER BY id_listaEtiquetasRFID DESC LIMIT %s OFFSET %s"
-            params.extend([limite, offset])
-            
-            cursor.execute(query, params)
-            etiquetas = cursor.fetchall()
+            # SEGUNDA CONEXÃO: Obter os registros
+            connection2 = None
+            cursor2 = None
+            try:
+                connection2 = self._get_connection()
+                cursor2 = connection2.cursor(dictionary=True)
+                
+                data_query = f"""
+                    SELECT 
+                        id_listaEtiquetasRFID,
+                        EtiquetaRFID_hex,
+                        Descricao,
+                        Destruida
+                    FROM etiquetasRFID
+                    WHERE {where_clause}
+                    ORDER BY id_listaEtiquetasRFID DESC
+                    LIMIT %s OFFSET %s
+                """
+                
+                # Adicionar limite e offset aos parâmetros
+                query_params = params.copy()
+                query_params.extend([limite, offset])
+                
+                cursor2.execute(data_query, query_params)
+                etiquetas = cursor2.fetchall()
+                
+            except Exception as e:
+                self.logger.error(f"Erro ao buscar registros: {e}")
+                raise
+            finally:
+                if cursor2:
+                    cursor2.close()
+                if connection2:
+                    connection2.close()
             
             return {
                 'success': True,
@@ -113,7 +141,7 @@ class GerenciadorEtiquetasRFID:
                 'offset': offset
             }
             
-        except Error as e:
+        except Exception as e:
             self.logger.error(f"Erro ao obter etiquetas: {e}")
             return {
                 'success': False,
@@ -121,11 +149,6 @@ class GerenciadorEtiquetasRFID:
                 'etiquetas': [],
                 'total': 0
             }
-        finally:
-            if cursor:
-                cursor.close()
-            if connection:
-                connection.close()
     
     def obter_etiqueta_por_id(self, id_etiqueta):
         """
@@ -209,7 +232,6 @@ class GerenciadorEtiquetasRFID:
             valores.append(id_etiqueta)
             
             cursor.execute(query, valores)
-            connection.commit()
             
             return {
                 'success': True,
@@ -219,8 +241,6 @@ class GerenciadorEtiquetasRFID:
             
         except Error as e:
             self.logger.error(f"Erro ao atualizar etiqueta {id_etiqueta}: {e}")
-            if connection:
-                connection.rollback()
             return {
                 'success': False,
                 'error': str(e)
@@ -238,27 +258,45 @@ class GerenciadorEtiquetasRFID:
         Returns:
             dict: Estatísticas
         """
-        connection = None
-        cursor = None
-        
         try:
-            connection = self._get_connection()
-            cursor = connection.cursor(dictionary=True)
+            total = 0
+            destruidas = 0
             
-            # Total de etiquetas
-            cursor.execute("SELECT COUNT(*) as total FROM etiquetasRFID")
-            result = cursor.fetchone()
-            total = result['total'] if result else 0
+            # Primeira conexão: total de etiquetas
+            connection1 = None
+            cursor1 = None
+            try:
+                connection1 = self._get_connection()
+                cursor1 = connection1.cursor(dictionary=True)
+                
+                cursor1.execute("SELECT COUNT(*) as total FROM etiquetasRFID")
+                result = cursor1.fetchone()
+                total = result['total'] if result and 'total' in result else 0
+                
+            finally:
+                if cursor1:
+                    cursor1.close()
+                if connection1:
+                    connection1.close()
             
-            # Limpar o cursor antes da próxima query
-            cursor.fetchall()  # Garantir que todos os resultados foram lidos
+            # Segunda conexão: total de destruídas
+            connection2 = None
+            cursor2 = None
+            try:
+                connection2 = self._get_connection()
+                cursor2 = connection2.cursor(dictionary=True)
+                
+                cursor2.execute("SELECT COUNT(*) as destruidas FROM etiquetasRFID WHERE Destruida = 1")
+                result = cursor2.fetchone()
+                destruidas = result['destruidas'] if result and 'destruidas' in result else 0
+                
+            finally:
+                if cursor2:
+                    cursor2.close()
+                if connection2:
+                    connection2.close()
             
-            # Total de etiquetas destruídas
-            cursor.execute("SELECT COUNT(*) as destruidas FROM etiquetasRFID WHERE Destruida = 1")
-            result = cursor.fetchone()
-            destruidas = result['destruidas'] if result else 0
-            
-            # Total de etiquetas ativas
+            # Calcular ativas
             ativas = total - destruidas
             
             return {
@@ -271,7 +309,7 @@ class GerenciadorEtiquetasRFID:
                 }
             }
             
-        except Error as e:
+        except Exception as e:
             self.logger.error(f"Erro ao obter estatísticas: {e}")
             return {
                 'success': False,
@@ -283,8 +321,3 @@ class GerenciadorEtiquetasRFID:
                     'percentual_ativas': 0
                 }
             }
-        finally:
-            if cursor:
-                cursor.close()
-            if connection:
-                connection.close()
