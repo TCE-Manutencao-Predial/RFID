@@ -784,16 +784,31 @@
                 
                 // Mensagem de erro mais detalhada
                 let errorMessage = 'Erro ao carregar os dados';
+                let detailMessage = '';
+                
                 if (error.message.includes('404')) {
                     errorMessage = 'API não encontrada. Verifique se o servidor está rodando.';
+                } else if (error.message.includes('500')) {
+                    errorMessage = 'Erro interno do servidor.';
+                    // Tentar obter mais detalhes do erro
+                    if (response) {
+                        try {
+                            const errorData = await response.json();
+                            if (errorData.error) {
+                                detailMessage = errorData.error;
+                            }
+                        } catch (e) {
+                            console.error('Erro ao processar resposta de erro:', e);
+                        }
+                    }
                 } else if (error.message.includes('NetworkError')) {
                     errorMessage = 'Erro de conexão. Verifique sua internet.';
                 } else if (error.message) {
                     errorMessage = error.message;
                 }
                 
-                mostrarErro(errorMessage);
-                showToast(errorMessage, 'error');
+                mostrarErro(errorMessage, detailMessage);
+                showToast(detailMessage || errorMessage, 'error');
             }
         }
         
@@ -953,12 +968,13 @@
             document.getElementById('paginacao').style.display = 'none';
         }
         
-        function mostrarErro(mensagem) {
+        function mostrarErro(mensagem, detalhe = '') {
             const emptyState = document.getElementById('emptyState');
             emptyState.innerHTML = `
                 <i class="fas fa-exclamation-triangle" style="color: var(--rfid-danger);"></i>
                 <h3>Erro ao carregar dados</h3>
                 <p>${mensagem}</p>
+                ${detalhe ? `<p style="font-size: 0.85rem; color: #6c757d; margin-top: 10px;">${detalhe}</p>` : ''}
                 <button class="rfid-btn rfid-btn-primary" onclick="carregarDados()">
                     <i class="fas fa-redo"></i> Tentar Novamente
                 </button>

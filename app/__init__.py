@@ -1,5 +1,5 @@
 # app/__init__.py
-from flask import Flask
+from flask import Flask, render_template
 from .config import setup_logging
 import logging
 

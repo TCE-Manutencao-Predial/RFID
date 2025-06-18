@@ -1,6 +1,7 @@
 # app/routes/api_etiquetas.py
 from flask import Blueprint, jsonify, request, current_app
 import logging
+import traceback
 
 api_bp = Blueprint('api', __name__)
 logger = logging.getLogger('RFID.api')
@@ -18,16 +19,26 @@ def listar_etiquetas():
         - destruida: filtro por status (0 ou 1)
     """
     try:
+        logger.info("Iniciando listagem de etiquetas")
+        
         gerenciador = current_app.config.get('GERENCIADOR_RFID')
         if not gerenciador:
+            logger.error("Gerenciador RFID não encontrado no config")
             return jsonify({
                 'success': False,
                 'error': 'Gerenciador não inicializado'
             }), 500
         
-        # Obter parâmetros
-        limite = int(request.args.get('limite', 20))
-        offset = int(request.args.get('offset', 0))
+        # Obter parâmetros com validação
+        try:
+            limite = int(request.args.get('limite', 20))
+            offset = int(request.args.get('offset', 0))
+        except ValueError as e:
+            logger.error(f"Parâmetros inválidos: {e}")
+            return jsonify({
+                'success': False,
+                'error': 'Parâmetros de paginação inválidos'
+            }), 400
         
         # Filtros
         filtros = {}
@@ -36,7 +47,12 @@ def listar_etiquetas():
         if request.args.get('descricao'):
             filtros['descricao'] = request.args.get('descricao')
         if request.args.get('destruida') is not None:
-            filtros['destruida'] = int(request.args.get('destruida'))
+            try:
+                filtros['destruida'] = int(request.args.get('destruida'))
+            except ValueError:
+                logger.error(f"Valor inválido para destruida: {request.args.get('destruida')}")
+        
+        logger.info(f"Buscando etiquetas com filtros: {filtros}, limite: {limite}, offset: {offset}")
         
         # Buscar etiquetas
         resultado = gerenciador.obter_etiquetas(
@@ -45,19 +61,30 @@ def listar_etiquetas():
             offset=offset
         )
         
+        if not resultado.get('success', False):
+            logger.error(f"Erro ao obter etiquetas: {resultado.get('error', 'Erro desconhecido')}")
+            return jsonify({
+                'success': False,
+                'error': resultado.get('error', 'Erro ao buscar etiquetas')
+            }), 500
+        
+        logger.info(f"Etiquetas obtidas com sucesso. Total: {resultado.get('total', 0)}")
         return jsonify(resultado)
     
     except Exception as e:
-        logger.error(f"Erro ao listar etiquetas: {e}")
+        logger.error(f"Erro não tratado ao listar etiquetas: {str(e)}")
+        logger.error(f"Traceback: {traceback.format_exc()}")
         return jsonify({
             'success': False,
-            'error': str(e)
+            'error': f'Erro interno: {str(e)}'
         }), 500
 
 @api_bp.route('/etiquetas/<int:id_etiqueta>', methods=['GET'])
 def obter_etiqueta(id_etiqueta):
     """Obtém detalhes de uma etiqueta específica."""
     try:
+        logger.info(f"Obtendo etiqueta ID: {id_etiqueta}")
+        
         gerenciador = current_app.config.get('GERENCIADOR_RFID')
         if not gerenciador:
             return jsonify({
@@ -79,7 +106,8 @@ def obter_etiqueta(id_etiqueta):
             }), 404
     
     except Exception as e:
-        logger.error(f"Erro ao obter etiqueta {id_etiqueta}: {e}")
+        logger.error(f"Erro ao obter etiqueta {id_etiqueta}: {str(e)}")
+        logger.error(f"Traceback: {traceback.format_exc()}")
         return jsonify({
             'success': False,
             'error': str(e)
@@ -114,7 +142,8 @@ def atualizar_etiqueta(id_etiqueta):
             return jsonify(resultado), 400
     
     except Exception as e:
-        logger.error(f"Erro ao atualizar etiqueta {id_etiqueta}: {e}")
+        logger.error(f"Erro ao atualizar etiqueta {id_etiqueta}: {str(e)}")
+        logger.error(f"Traceback: {traceback.format_exc()}")
         return jsonify({
             'success': False,
             'error': str(e)
@@ -124,18 +153,48 @@ def atualizar_etiqueta(id_etiqueta):
 def obter_estatisticas():
     """Obtém estatísticas das etiquetas."""
     try:
+        logger.info("Obtendo estatísticas")
+        
         gerenciador = current_app.config.get('GERENCIADOR_RFID')
         if not gerenciador:
+            logger.error("Gerenciador RFID não encontrado")
             return jsonify({
                 'success': False,
                 'error': 'Gerenciador não inicializado'
             }), 500
         
         resultado = gerenciador.obter_estatisticas()
+        
+        if not resultado.get('success', False):
+            logger.error(f"Erro ao obter estatísticas: {resultado.get('error', 'Erro desconhecido')}")
+            return jsonify({
+                'success': False,
+                'error': resultado.get('error', 'Erro ao obter estatísticas')
+            }), 500
+            
+        logger.info("Estatísticas obtidas com sucesso")
         return jsonify(resultado)
     
     except Exception as e:
-        logger.error(f"Erro ao obter estatísticas: {e}")
+        logger.error(f"Erro não tratado ao obter estatísticas: {str(e)}")
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        return jsonify({
+            'success': False,
+            'error': f'Erro interno: {str(e)}'
+        }), 500
+
+# Rota de teste/debug
+@api_bp.route('/test', methods=['GET'])
+def test_api():
+    """Rota de teste para verificar se a API está funcionando."""
+    try:
+        gerenciador = current_app.config.get('GERENCIADOR_RFID')
+        return jsonify({
+            'success': True,
+            'message': 'API funcionando',
+            'gerenciador_status': 'OK' if gerenciador else 'Não inicializado'
+        })
+    except Exception as e:
         return jsonify({
             'success': False,
             'error': str(e)
