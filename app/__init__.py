@@ -38,12 +38,31 @@ def create_app():
             return "Erro interno do servidor", 500
 
     # Registrar blueprints
-    app.register_blueprint(web_bp)
     app.register_blueprint(api_bp, url_prefix='/api')
-
+    
+    # IMPORTANTE: Modificar para servir a página principal na raiz
     @app.route('/')
+    @app.route('/index')
+    @app.route('/index.html')
     def index():
-        """Página inicial - redireciona para controle de etiquetas."""
-        return redirect(url_for('web.controle_etiquetas'))
-
+        """Página principal - serve diretamente o controle de etiquetas."""
+        try:
+            gerenciador = app.config.get('GERENCIADOR_RFID')
+            if not gerenciador:
+                rfid_logger.error("Gerenciador RFID não inicializado")
+                return render_template('erro_interno.html'), 500
+            
+            # Obter estatísticas
+            stats_result = gerenciador.obter_estatisticas()
+            estatisticas = stats_result.get('estatisticas', {})
+            
+            return render_template('controle_etiquetas.html', estatisticas=estatisticas)
+        
+        except Exception as e:
+            rfid_logger.error(f"Erro ao carregar página de etiquetas: {e}")
+            return render_template('erro_interno.html'), 500
+    
+    # Manter a rota /etiquetas também funcionando
+    app.register_blueprint(web_bp)
+    
     return app
