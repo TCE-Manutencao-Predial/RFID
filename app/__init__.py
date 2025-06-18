@@ -1,15 +1,16 @@
 # app/__init__.py
-from flask import Flask, redirect, render_template, url_for
-from .routes.web import web_bp
-from .routes.api_etiquetas import api_bp
+from flask import Flask
 from .config import setup_logging
 import logging
 
 # Configurar logging
 rfid_logger = setup_logging()
 
+ROUTES_PREFIX = '/RFID'
+
 def create_app():
-    app = Flask(__name__)
+    # IMPORTANTE: Configurar static_url_path com o prefixo
+    app = Flask(__name__, static_url_path=f'{ROUTES_PREFIX}/static')
     app.config['SECRET_KEY'] = '123rfid'
     
     # Inicializa gerenciador de etiquetas RFID
@@ -37,32 +38,12 @@ def create_app():
         except:
             return "Erro interno do servidor", 500
 
-    # Registrar blueprints
-    app.register_blueprint(api_bp, url_prefix='/api')
+    # Registrar blueprints com prefixo
+    from .routes.web import web_bp
+    from .routes.api_etiquetas import api_bp
     
-    # IMPORTANTE: Modificar para servir a página principal na raiz
-    @app.route('/')
-    @app.route('/index')
-    @app.route('/index.html')
-    def index():
-        """Página principal - serve diretamente o controle de etiquetas."""
-        try:
-            gerenciador = app.config.get('GERENCIADOR_RFID')
-            if not gerenciador:
-                rfid_logger.error("Gerenciador RFID não inicializado")
-                return render_template('erro_interno.html'), 500
-            
-            # Obter estatísticas
-            stats_result = gerenciador.obter_estatisticas()
-            estatisticas = stats_result.get('estatisticas', {})
-            
-            return render_template('controle_etiquetas.html', estatisticas=estatisticas)
-        
-        except Exception as e:
-            rfid_logger.error(f"Erro ao carregar página de etiquetas: {e}")
-            return render_template('erro_interno.html'), 500
-    
-    # Manter a rota /etiquetas também funcionando
-    app.register_blueprint(web_bp)
+    # IMPORTANTE: Registrar com url_prefix
+    app.register_blueprint(web_bp, url_prefix=ROUTES_PREFIX)
+    app.register_blueprint(api_bp, url_prefix=f'{ROUTES_PREFIX}/api')
     
     return app

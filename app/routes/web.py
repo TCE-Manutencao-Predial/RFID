@@ -5,6 +5,9 @@ import logging
 web_bp = Blueprint('web', __name__)
 logger = logging.getLogger('controlerfid.web')
 
+@web_bp.route('/')
+@web_bp.route('/index')
+@web_bp.route('/index.html')
 @web_bp.route('/etiquetas')
 def controle_etiquetas():
     """Página principal de controle de etiquetas RFID."""
