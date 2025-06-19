@@ -770,7 +770,6 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 
-// ATUALIZAR A FUNÇÃO navegarPara NO ARQUIVO controle_etiquetas.js
 
 // Função de navegação para os botões do header
 function navegarPara(secao) {
@@ -779,8 +778,8 @@ function navegarPara(secao) {
             window.location.href = '/RFID/inventarios';
             break;
         
-        case 'antenas':
-            window.location.href = '/RFID/antenas';
+        case 'leitores':
+            window.location.href = '/RFID/leitores';
             break;
         
         case 'emprestimos':
@@ -805,8 +804,8 @@ document.addEventListener('DOMContentLoaded', function() {
     const currentPath = window.location.pathname;
     if (currentPath.includes('inventarios')) {
         document.querySelector('.rfid-nav-btn[onclick*="inventarios"]')?.classList.add('active');
-    } else if (currentPath.includes('antenas')) {
-        document.querySelector('.rfid-nav-btn[onclick*="antenas"]')?.classList.add('active');
+    } else if (currentPath.includes('leitores')) {
+        document.querySelector('.rfid-nav-btn[onclick*="leitores"]')?.classList.add('active');
     } else if (currentPath.includes('emprestimos')) {
         document.querySelector('.rfid-nav-btn[onclick*="emprestimos"]')?.classList.add('active');
     }

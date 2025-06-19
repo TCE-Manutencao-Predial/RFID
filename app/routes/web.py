@@ -45,22 +45,22 @@ def inventarios():
         logger.error(f"Erro ao carregar página de inventários: {e}")
         return render_template('erro_interno.html'), 500
 
-@web_bp.route('/antenas')
-@web_bp.route('/antenas.html')
-def antenas():
-    """Página de gerenciamento de antenas RFID."""
+@web_bp.route('/leitores')
+@web_bp.route('/leitores.html')
+def leitores():
+    """Página de gerenciamento de leitores RFID."""
     try:
         gerenciador = current_app.config.get('GERENCIADOR_RFID')
         if not gerenciador:
             logger.error("Gerenciador RFID não inicializado")
             return render_template('erro_interno.html'), 500
         
-        # Futuramente: obter dados específicos de antenas
+        # Futuramente: obter dados específicos de leitores
         # Por enquanto, renderiza a página básica
-        return render_template('antenas.html')
+        return render_template('leitores.html')
     
     except Exception as e:
-        logger.error(f"Erro ao carregar página de antenas: {e}")
+        logger.error(f"Erro ao carregar página de leitores: {e}")
         return render_template('erro_interno.html'), 500
 
 @web_bp.route('/emprestimos')

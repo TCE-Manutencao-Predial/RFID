@@ -21,6 +21,15 @@ def create_app():
     except Exception as e:
         rfid_logger.error(f"Erro ao inicializar gerenciador RFID: {e}")
         app.config['GERENCIADOR_RFID'] = None
+    
+    # Inicializa gerenciador de leitores RFID
+    try:
+        from .utils.GerenciadorLeitoresRFID import GerenciadorLeitoresRFID
+        app.config['GERENCIADOR_LEITORES'] = GerenciadorLeitoresRFID.get_instance()
+        rfid_logger.info("Gerenciador de leitores RFID iniciado")
+    except Exception as e:
+        rfid_logger.error(f"Erro ao inicializar gerenciador de leitores: {e}")
+        app.config['GERENCIADOR_LEITORES'] = None
 
     # Handlers de erro
     @app.errorhandler(404)
@@ -41,9 +50,16 @@ def create_app():
     # Registrar blueprints com prefixo
     from .routes.web import web_bp
     from .routes.api_etiquetas import api_bp
+    from .routes.api_leitores import api_leitores_bp
     
     # IMPORTANTE: Registrar com url_prefix
     app.register_blueprint(web_bp, url_prefix=ROUTES_PREFIX)
     app.register_blueprint(api_bp, url_prefix=f'{ROUTES_PREFIX}/api')
+    app.register_blueprint(api_leitores_bp, url_prefix=f'{ROUTES_PREFIX}/api')
+    
+    # Log de rotas registradas para debug
+    rfid_logger.info("Rotas registradas:")
+    for rule in app.url_map.iter_rules():
+        rfid_logger.info(f"  {rule.endpoint}: {rule.rule}")
     
     return app
