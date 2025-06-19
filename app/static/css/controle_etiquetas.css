@@ -1131,3 +1131,24 @@
     transform: translateX(-50%) translateY(2px);
   }
 }
+
+/* ADICIONAR AO ARQUIVO controle_etiquetas.css */
+
+/* Estado ativo para botões de navegação */
+.rfid-nav-btn.active {
+  background: rgba(255, 255, 255, 0.3);
+  border-color: rgba(255, 255, 255, 0.6);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.rfid-nav-btn.active i,
+.rfid-nav-btn.active span {
+  opacity: 1;
+  font-weight: 600;
+}
+
+/* Desabilitar hover no botão ativo */
+.rfid-nav-btn.active:hover {
+  transform: none;
+  cursor: default;
+}

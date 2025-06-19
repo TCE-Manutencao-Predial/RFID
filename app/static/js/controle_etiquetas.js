@@ -769,3 +769,45 @@ document.addEventListener('DOMContentLoaded', function() {
         campoCodigoRFID.maxLength = 24;
     }
 });
+
+// ATUALIZAR A FUNÇÃO navegarPara NO ARQUIVO controle_etiquetas.js
+
+// Função de navegação para os botões do header
+function navegarPara(secao) {
+    switch(secao) {
+        case 'inventarios':
+            window.location.href = '/RFID/inventarios';
+            break;
+        
+        case 'antenas':
+            window.location.href = '/RFID/antenas';
+            break;
+        
+        case 'emprestimos':
+            window.location.href = '/RFID/emprestimos';
+            break;
+        
+        default:
+            showToast('Seção não encontrada', 'error');
+    }
+}
+
+// Adicionar indicador visual para página atual
+document.addEventListener('DOMContentLoaded', function() {
+    // Adicionar data-tooltip aos botões de navegação
+    const navButtons = document.querySelectorAll('.rfid-nav-btn');
+    navButtons.forEach(btn => {
+        const texto = btn.querySelector('span').textContent;
+        btn.setAttribute('data-tooltip', texto);
+    });
+    
+    // Destacar botão da página atual
+    const currentPath = window.location.pathname;
+    if (currentPath.includes('inventarios')) {
+        document.querySelector('.rfid-nav-btn[onclick*="inventarios"]')?.classList.add('active');
+    } else if (currentPath.includes('antenas')) {
+        document.querySelector('.rfid-nav-btn[onclick*="antenas"]')?.classList.add('active');
+    } else if (currentPath.includes('emprestimos')) {
+        document.querySelector('.rfid-nav-btn[onclick*="emprestimos"]')?.classList.add('active');
+    }
+});
