@@ -130,46 +130,52 @@ class GerenciadorLeitoresRFID:
             # Construir query base com filtros de prefixo e RSSI
             where_conditions = []
             params = []
-            
-            # Filtro principal: RSSI diferente de 0
+
             where_conditions.append("RSSI != 0")
-            
-            # Filtro principal: apenas etiquetas com prefixos válidos
             prefixo_conditions = []
             for prefixo in self.PREFIXOS_VALIDOS:
                 prefixo_conditions.append("l.EtiquetaRFID_hex LIKE %s")
                 params.append(f"{prefixo}%")
-            
             where_conditions.append(f"({' OR '.join(prefixo_conditions)})")
-            
+
             # Filtros adicionais do usuário
             if filtros:
                 if filtros.get('etiqueta'):
                     where_conditions.append("l.EtiquetaRFID_hex LIKE %s")
                     params.append(f"%{filtros['etiqueta']}%")
-                
+
+                # <<< INSERIDO filtro por descrição
+                if filtros.get('descricao'):
+                    where_conditions.append("e.Descricao LIKE %s")
+                    params.append(f"%{filtros['descricao']}%")
+
                 if filtros.get('antena'):
                     where_conditions.append("l.Antena = %s")
                     params.append(filtros['antena'])
-                
+
                 if filtros.get('horario_inicio'):
                     where_conditions.append("l.Horario >= %s")
                     params.append(filtros['horario_inicio'])
-                
+
                 if filtros.get('horario_fim'):
                     where_conditions.append("l.Horario <= %s")
                     params.append(filtros['horario_fim'])
-            
+
             where_clause = " AND ".join(where_conditions)
-            
-            # PRIMEIRA CONEXÃO: Obter o total
+
+            # PRIMEIRA CONEXÃO: Obter o total (agora com JOIN para descrição)
             connection1 = None
             cursor1 = None
             try:
                 connection1 = self._get_connection()
                 cursor1 = connection1.cursor(dictionary=True)
                 
-                count_query = f"SELECT COUNT(*) as total FROM leitoresRFID l WHERE {where_clause}"
+                count_query = f"""
+                    SELECT COUNT(*) as total
+                    FROM leitoresRFID l
+                    LEFT JOIN etiquetasRFID e ON l.EtiquetaRFID_hex = e.EtiquetaRFID_hex
+                    WHERE {where_clause}
+                """
                 cursor1.execute(count_query, params)
                 result = cursor1.fetchone()
                 total = result['total'] if result and 'total' in result else 0
@@ -183,7 +189,7 @@ class GerenciadorLeitoresRFID:
                 if connection1:
                     connection1.close()
             
-            # SEGUNDA CONEXÃO: Obter os registros com JOIN para descrição
+            # SEGUNDA CONEXÃO: Obter os registros (já havia JOIN)
             connection2 = None
             cursor2 = None
             try:

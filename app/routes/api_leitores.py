@@ -238,9 +238,15 @@ def obter_leituras_recentes(minutos):
         
         filtros = {
             'horario_inicio': inicio.strftime('%Y-%m-%d %H:%M:%S'),
-            'horario_fim': agora.strftime('%Y-%m-%d %H:%M:%S')
+            'horario_fim':   agora.strftime('%Y-%m-%d %H:%M:%S')
         }
-        
+
+        # reaplicar filtros opcionais
+        for chave in ('etiqueta', 'descricao', 'antena'):
+            val = request.args.get(chave)
+            if val:
+                filtros[chave] = val.strip()
+
         # Obter parâmetros de paginação
         try:
             limite = int(request.args.get('limite', 100))
