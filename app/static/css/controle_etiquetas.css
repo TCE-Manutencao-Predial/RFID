@@ -391,46 +391,282 @@
     background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
     border-radius: 4px;
     color: var(--rfid-primary);
-    padding: 2px 6px;
 }
 
-/* Badges de status - versão única e corrigida */
 .rfid-badge {
     display: inline-block;
-    padding: 6px 12px;
-    border-radius: 6px;
-    font-size: 0.8em;
-    font-weight: 600;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 0.85em;
+    font-weight: 500;
     text-align: center;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
 }
 
 .rfid-badge-active {
-    background-color: var(--rfid-success);
+    background-color: #28a745;
     color: white;
 }
 
 .rfid-badge-destroyed {
-    background-color: var(--rfid-danger);
+    background-color: #dc3545;
     color: white;
 }
 
-/* Estilo para linhas de etiquetas destruídas */
-.etiqueta-destruida {
-    background-color: rgba(248, 215, 218, 0.25) !important;
-    opacity: 0.85;
+/* Loading State */
+.rfid-loading {
+  text-align: center;
+  padding: 60px;
+  color: #6c757d;
 }
 
-.etiqueta-destruida:hover {
-    background-color: rgba(248, 215, 218, 0.4) !important;
-    opacity: 1;
+.rfid-loading i {
+  font-size: 3rem;
+  animation: spin 1s linear infinite;
+  color: var(--rfid-primary);
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Empty State */
+.rfid-empty {
+  text-align: center;
+  padding: 60px;
+  color: #6c757d;
+}
+
+.rfid-empty i {
+  font-size: 4rem;
+  margin-bottom: 20px;
+  color: var(--rfid-border);
 }
 
 /* Melhorar tooltips */
 [title] {
     cursor: help;
+    position: relative;
 }
 
-/* ...existing code... */
+/* Tooltip customizado */
+[title]:hover::after {
+    content: attr(title);
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--rfid-dark);
+    color: white;
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 0.8rem;
+    white-space: nowrap;
+    z-index: 1000;
+    opacity: 0;
+    animation: tooltip-show 0.2s ease forwards;
+}
+
+[title]:hover::before {
+    content: '';
+    position: absolute;
+    bottom: calc(100% - 5px);
+    left: 50%;
+    transform: translateX(-50%);
+    border: 5px solid transparent;
+    border-top-color: var(--rfid-dark);
+    z-index: 1000;
+}
+
+@keyframes tooltip-show {
+    from { opacity: 0; transform: translateX(-50%) translateY(5px); }
+    to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+/* Paginação */
+.rfid-pagination {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px;
+  background: var(--rfid-light);
+  border-top: 2px solid var(--rfid-border);
+  flex-wrap: wrap;
+  gap: 15px;
+}
+
+.rfid-pagination-info {
+  color: var(--rfid-dark);
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.rfid-pagination-info span {
+  font-weight: 700;
+  color: var(--rfid-primary);
+}
+
+.rfid-pagination-controls {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.rfid-page-btn {
+  padding: 8px 12px;
+  border: 1px solid var(--rfid-border);
+  background: white;
+  color: var(--rfid-dark);
+  border-radius: 6px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-width: 40px;
+  text-align: center;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.rfid-page-btn:hover:not(:disabled) {
+  background: var(--rfid-primary);
+  color: white;
+  border-color: var(--rfid-primary);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.rfid-page-btn.active {
+  background: var(--rfid-primary);
+  color: white;
+  border-color: var(--rfid-primary);
+  font-weight: 700;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.rfid-page-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: var(--rfid-light);
+}
+
+.rfid-page-btn:focus {
+  outline: 2px solid var(--rfid-primary);
+  outline-offset: 2px;
+}
+
+/* Estados vazios e loading */
+.rfid-loading,
+.rfid-empty {
+  text-align: center;
+  padding: 60px 20px;
+  color: var(--rfid-dark);
+}
+
+.rfid-loading i,
+.rfid-empty i {
+  font-size: 3rem;
+  color: var(--rfid-primary);
+  margin-bottom: 20px;
+  display: block;
+}
+
+.rfid-loading i {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.rfid-empty h3 {
+  font-size: 1.3rem;
+  margin: 10px 0;
+  color: var(--rfid-dark);
+}
+
+.rfid-empty p {
+  color: #6c757d;
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+
+/* Skeleton loading */
+.rfid-skeleton {
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: skeleton-loading 1.5s infinite;
+  border-radius: 4px;
+}
+
+@keyframes skeleton-loading {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* Responsividade */
+@media (max-width: 768px) {
+  .rfid-stats {
+    grid-template-columns: 1fr 1fr;
+  }
+  
+  .rfid-filters {
+    grid-template-columns: 1fr;
+  }
+  
+  .rfid-pagination {
+    justify-content: center;
+    text-align: center;
+    padding: 15px;
+  }
+  
+  .rfid-pagination-info {
+    width: 100%;
+    margin-bottom: 10px;
+    font-size: 0.8rem;
+  }
+  
+  .rfid-page-btn {
+    padding: 6px 10px;
+    font-size: 0.8rem;
+    min-width: 35px;
+  }
+  
+  /* Tooltip responsivo */
+  [title]:hover::after {
+    font-size: 0.7rem;
+    padding: 6px 10px;
+    max-width: 200px;
+    white-space: normal;
+    word-wrap: break-word;
+  }
+}
+
+@media (max-width: 480px) {
+  .rfid-stats {
+    grid-template-columns: 1fr;
+  }
+  
+  .rfid-pagination-controls {
+    gap: 3px;
+  }
+  
+  .rfid-page-btn {
+    padding: 5px 8px;
+    min-width: 30px;
+  }
+}
+
+/* Print styles */
+@media print {
+  .rfid-pagination,
+  .rfid-filters {
+    display: none;
+  }
+}
 

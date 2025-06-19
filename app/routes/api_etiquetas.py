@@ -47,17 +47,13 @@ def listar_etiquetas():
             filtros['etiqueta'] = request.args.get('etiqueta')
         if request.args.get('descricao'):
             filtros['descricao'] = request.args.get('descricao')
+
         if request.args.get('destruida') is not None:
             try:
-                status_filtro = int(request.args.get('destruida'))
-                # Converter filtro numérico para filtro de data
-                if status_filtro == 0:
-                    filtros['destruida_null'] = True  # Apenas etiquetas ativas (Destruida IS NULL)
-                elif status_filtro == 1:
-                    filtros['destruida_not_null'] = True  # Apenas etiquetas destruídas (Destruida IS NOT NULL)
+                filtros['destruida'] = int(request.args.get('destruida'))
             except ValueError:
-                logger.error(f"Valor inválido para destruida: {request.args.get('destruida')}")
-        
+                logger.error(f"Valor inválido para destruida: {request.args.get('destruida')}")        
+                
         # Verificar se é uma atualização forçada
         force_refresh = request.args.get('force_refresh', '').lower() == 'true'
         

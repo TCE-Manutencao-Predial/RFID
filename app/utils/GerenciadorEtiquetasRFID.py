@@ -126,8 +126,11 @@ class GerenciadorEtiquetasRFID:
                     params.append(f"%{filtros['descricao']}%")
                 
                 if filtros.get('destruida') is not None:
-                    where_conditions.append("Destruida = %s")
-                    params.append(filtros['destruida'])
+                    # Filtrar por status baseado no campo de data
+                    if filtros['destruida'] == 0:  # Ativas
+                        where_conditions.append("Destruida IS NULL")
+                    elif filtros['destruida'] == 1:  # Destruídas
+                        where_conditions.append("Destruida IS NOT NULL")
             
             where_clause = " AND ".join(where_conditions) if where_conditions else "1=1"
             

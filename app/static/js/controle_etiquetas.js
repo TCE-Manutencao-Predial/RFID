@@ -114,6 +114,7 @@ async function carregarDados(forceRefresh = false, showToastMessage = false) {
     const data = await response.json();
 
     if (data.success) {
+      console.log("Dados recebidos:", data); // Debug para verificar os dados
       totalRegistros = data.total;
       renderizarTabela(data.etiquetas);
       atualizarPaginacao();
@@ -200,13 +201,10 @@ function renderizarTabela(etiquetas) {
     // Determinar status baseado no campo Destruida
     let statusBadge;
     let statusTooltip = "";
-    
+
     // Verificar se a etiqueta tem data de destruição
-    const temDataDestruicao = etiqueta.Destruida && 
-                             etiqueta.Destruida !== null && 
-                             etiqueta.Destruida !== "" && 
-                             etiqueta.Destruida !== "null";
-    
+    const temDataDestruicao = etiqueta.Destruida && etiqueta.Destruida !== null && etiqueta.Destruida !== "" && etiqueta.Destruida !== "null";
+
     if (temDataDestruicao) {
       // Etiqueta destruída - tem data no campo Destruida
       statusBadge = '<span class="rfid-badge rfid-badge-destroyed">Destruída</span>';
