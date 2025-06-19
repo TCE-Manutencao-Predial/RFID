@@ -2,6 +2,7 @@
 from flask import Blueprint, jsonify, request, current_app
 import logging
 import traceback
+from datetime import datetime
 
 api_bp = Blueprint('api', __name__)
 logger = logging.getLogger('RFID.api')
@@ -16,7 +17,7 @@ def listar_etiquetas():
         - offset: deslocamento
         - etiqueta: filtro por código da etiqueta
         - descricao: filtro por descrição
-        - destruida: filtro por status (0 ou 1)
+        - destruida: filtro por status (0=ativas, 1=destruídas)
     """
     try:
         logger.info("Iniciando listagem de etiquetas")
@@ -48,7 +49,12 @@ def listar_etiquetas():
             filtros['descricao'] = request.args.get('descricao')
         if request.args.get('destruida') is not None:
             try:
-                filtros['destruida'] = int(request.args.get('destruida'))
+                status_filtro = int(request.args.get('destruida'))
+                # Converter filtro numérico para filtro de data
+                if status_filtro == 0:
+                    filtros['destruida_null'] = True  # Apenas etiquetas ativas (Destruida IS NULL)
+                elif status_filtro == 1:
+                    filtros['destruida_not_null'] = True  # Apenas etiquetas destruídas (Destruida IS NOT NULL)
             except ValueError:
                 logger.error(f"Valor inválido para destruida: {request.args.get('destruida')}")
         
@@ -71,6 +77,34 @@ def listar_etiquetas():
                 'success': False,
                 'error': resultado.get('error', 'Erro ao buscar etiquetas')
             }), 500
+        
+        # Processar dados das etiquetas para incluir status formatado
+        etiquetas_processadas = []
+        for etiqueta in resultado.get('etiquetas', []):
+            etiqueta_processada = etiqueta.copy()
+            
+            # Adicionar campos de status baseado na data de destruição
+            if etiqueta.get('Destruida'):
+                etiqueta_processada['status'] = 'destruida'
+                etiqueta_processada['ativa'] = False
+                # Formatar data de destruição para exibição
+                try:
+                    if isinstance(etiqueta['Destruida'], str):
+                        data_destruicao = datetime.strptime(etiqueta['Destruida'], '%Y-%m-%d %H:%M:%S')
+                        etiqueta_processada['data_destruicao_formatada'] = data_destruicao.strftime('%d/%m/%Y às %H:%M')
+                    else:
+                        etiqueta_processada['data_destruicao_formatada'] = str(etiqueta['Destruida'])
+                except ValueError:
+                    etiqueta_processada['data_destruicao_formatada'] = str(etiqueta['Destruida'])
+            else:
+                etiqueta_processada['status'] = 'ativa'
+                etiqueta_processada['ativa'] = True
+                etiqueta_processada['data_destruicao_formatada'] = None
+            
+            etiquetas_processadas.append(etiqueta_processada)
+        
+        # Atualizar resultado com etiquetas processadas
+        resultado['etiquetas'] = etiquetas_processadas
         
         logger.info(f"Etiquetas obtidas com sucesso. Total: {resultado.get('total', 0)}")
         return jsonify(resultado)

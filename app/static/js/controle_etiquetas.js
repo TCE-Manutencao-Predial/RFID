@@ -235,15 +235,32 @@ function renderizarTabela(etiquetas) {
   etiquetas.forEach((etiqueta) => {
     const tr = document.createElement("tr");
 
-    const statusBadge = etiqueta.Destruida
-      ? '<span class="rfid-badge rfid-badge-destroyed">Destruída</span>'
-      : '<span class="rfid-badge rfid-badge-active">Ativa</span>';
+    // Determinar status baseado no campo Destruida
+    let statusBadge;
+    let statusTooltip = "";
+    
+    if (etiqueta.Destruida) {
+      // Etiqueta destruída - tem data no campo Destruida
+      statusBadge = '<span class="rfid-badge rfid-badge-destroyed">Destruída</span>';
+      if (etiqueta.data_destruicao_formatada) {
+        statusTooltip = `title="Destruída em ${etiqueta.data_destruicao_formatada}"`;
+      }
+    } else {
+      // Etiqueta ativa - campo Destruida é NULL
+      statusBadge = '<span class="rfid-badge rfid-badge-active">Ativa</span>';
+      statusTooltip = 'title="Etiqueta ativa"';
+    }
 
     tr.innerHTML = `
                     <td><span class="rfid-etiqueta">${etiqueta.EtiquetaRFID_hex || "-"}</span></td>
                     <td>${etiqueta.Descricao || "-"}</td>
-                    <td>${statusBadge}</td>
+                    <td ${statusTooltip}>${statusBadge}</td>
                 `;
+
+    // Adicionar classe visual para etiquetas destruídas
+    if (etiqueta.Destruida) {
+      tr.classList.add("etiqueta-destruida");
+    }
 
     tbody.appendChild(tr);
   });

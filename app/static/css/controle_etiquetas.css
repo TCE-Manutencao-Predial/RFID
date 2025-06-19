@@ -383,10 +383,14 @@
 }
 
 .rfid-etiqueta {
-  font-family: "Courier New", monospace;
-  font-weight: 600;
-  color: var(--rfid-primary);
-  font-size: 0.95rem;
+    font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', 'Source Code Pro', 'Menlo', 'Courier New', monospace;
+    font-size: 0.85em;
+    font-weight: 600;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    border-radius: 4px;
+    color: var(--rfid-primary);
 }
 
 .rfid-badge {
@@ -398,13 +402,13 @@
 }
 
 .rfid-badge-active {
-  background: #d4edda;
-  color: #155724;
+  background: #28a745;
+  color: white;
 }
 
 .rfid-badge-destroyed {
-  background: #f8d7da;
-  color: #721c24;
+  background: #dc3545;
+  color: white;
 }
 
 /* Loading State */
@@ -512,4 +516,30 @@
     min-width: unset;
     max-width: unset;
   }
+}
+
+/* Estilo para linhas de etiquetas destruídas */
+.etiqueta-destruida {
+    background-color: rgba(248, 215, 218, 0.3);
+    opacity: 0.8;
+}
+
+.etiqueta-destruida:hover {
+    background-color: rgba(248, 215, 218, 0.5);
+}
+
+/* Melhorar tooltips */
+[title] {
+    cursor: help;
+}
+
+/* Badges de status */
+.rfid-badge-destroyed {
+    background-color: #dc3545;
+    color: white;
+}
+
+.rfid-badge-active {
+    background-color: #28a745;
+    color: white;
 }
