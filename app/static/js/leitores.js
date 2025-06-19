@@ -552,10 +552,14 @@ document.addEventListener('DOMContentLoaded', function() {
         btn.setAttribute('data-tooltip', texto);
     });
     
+    // Remover classe active de todos os botões primeiro
+    const allNavButtons = document.querySelectorAll('.rfid-nav-btn');
+    allNavButtons.forEach(btn => btn.classList.remove('active'));
+    
     // Destacar botão da página atual
     const currentPath = window.location.pathname;
     
-    // Lógica corrigida para destacar a página atual
+    // Lógica específica para cada página
     if (currentPath === '/RFID/' || 
         currentPath === '/RFID' || 
         currentPath === '/RFID/index' || 
