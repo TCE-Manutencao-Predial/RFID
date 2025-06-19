@@ -14,6 +14,317 @@
     <!-- CSS Específico -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/controle_etiquetas.css') }}">
 
+    <style>
+        /* Estilos adicionais para modal e formulários */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .modal-overlay.active {
+            display: block;
+            opacity: 1;
+        }
+
+        .modal {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) scale(0.9);
+            background: white;
+            border-radius: 12px;
+            padding: 0;
+            max-width: 600px;
+            width: 90%;
+            max-height: 90vh;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+            transition: transform 0.3s ease;
+        }
+
+        .modal-overlay.active .modal {
+            transform: translate(-50%, -50%) scale(1);
+        }
+
+        .modal-header {
+            background: var(--rfid-primary);
+            color: white;
+            padding: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-title {
+            font-size: 1.3rem;
+            font-weight: 600;
+            margin: 0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            color: white;
+            font-size: 1.5rem;
+            cursor: pointer;
+            padding: 0;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 4px;
+            transition: background 0.2s;
+        }
+
+        .modal-close:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .modal-body {
+            padding: 25px;
+            overflow-y: auto;
+            max-height: calc(90vh - 140px);
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-label {
+            display: block;
+            font-weight: 600;
+            color: var(--rfid-dark);
+            margin-bottom: 8px;
+            font-size: 0.9rem;
+        }
+
+        .form-label .required {
+            color: var(--rfid-danger);
+        }
+
+        .form-input,
+        .form-textarea {
+            width: 100%;
+            padding: 10px 15px;
+            border: 2px solid var(--rfid-border);
+            border-radius: 8px;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+            box-sizing: border-box;
+        }
+
+        .form-textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+
+        .form-input:focus,
+        .form-textarea:focus {
+            outline: none;
+            border-color: var(--rfid-primary);
+            box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+        }
+
+        .form-input.error {
+            border-color: var(--rfid-danger);
+        }
+
+        .form-error {
+            color: var(--rfid-danger);
+            font-size: 0.85rem;
+            margin-top: 5px;
+        }
+
+        .form-hint {
+            color: #6c757d;
+            font-size: 0.85rem;
+            margin-top: 5px;
+        }
+
+        .modal-footer {
+            background: var(--rfid-light);
+            padding: 15px 25px;
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            border-top: 1px solid var(--rfid-border);
+        }
+
+        .btn-cancel {
+            background: white;
+            color: var(--rfid-dark);
+            border: 2px solid var(--rfid-border);
+        }
+
+        .btn-cancel:hover {
+            background: var(--rfid-light);
+            transform: translateY(-2px);
+        }
+
+        /* Botões de ação na tabela */
+        .rfid-actions {
+            display: flex;
+            gap: 8px;
+            justify-content: flex-start;
+        }
+
+        .rfid-action-btn {
+            padding: 6px 10px;
+            border: none;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            font-weight: 500;
+        }
+
+        .rfid-action-btn-primary {
+            background: var(--rfid-primary);
+            color: white;
+        }
+
+        .rfid-action-btn-primary:hover {
+            background: #0056b3;
+            transform: translateY(-1px);
+        }
+
+        .rfid-action-btn-danger {
+            background: var(--rfid-danger);
+            color: white;
+        }
+
+        .rfid-action-btn-danger:hover {
+            background: #c82333;
+            transform: translateY(-1px);
+        }
+
+        .rfid-action-btn-success {
+            background: var(--rfid-success);
+            color: white;
+        }
+
+        .rfid-action-btn-success:hover {
+            background: #218838;
+            transform: translateY(-1px);
+        }
+
+        .rfid-action-btn-warning {
+            background: var(--rfid-warning);
+            color: #212529;
+        }
+
+        .rfid-action-btn-warning:hover {
+            background: #e0a800;
+            transform: translateY(-1px);
+        }
+
+        /* Upload de foto */
+        .photo-upload-area {
+            border: 2px dashed var(--rfid-border);
+            border-radius: 8px;
+            padding: 30px;
+            text-align: center;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            background: var(--rfid-light);
+        }
+
+        .photo-upload-area:hover,
+        .photo-upload-area.drag-over {
+            border-color: var(--rfid-primary);
+            background: rgba(0, 123, 255, 0.05);
+        }
+
+        .photo-upload-icon {
+            font-size: 3rem;
+            color: var(--rfid-primary);
+            margin-bottom: 10px;
+        }
+
+        .photo-preview {
+            max-width: 100%;
+            max-height: 200px;
+            margin-top: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        /* Etiqueta destruída - visual */
+        .etiqueta-destruida {
+            opacity: 0.7;
+            background: #fff5f5;
+        }
+
+        .etiqueta-destruida:hover {
+            background: #ffe0e0;
+        }
+
+        /* Modal de confirmação */
+        .confirm-modal .modal {
+            max-width: 400px;
+        }
+
+        .confirm-icon {
+            font-size: 3rem;
+            color: var(--rfid-warning);
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .confirm-message {
+            text-align: center;
+            color: var(--rfid-dark);
+            margin-bottom: 20px;
+            line-height: 1.6;
+        }
+
+        /* Adicionar coluna de ações na tabela */
+        .rfid-table th:last-child,
+        .rfid-table td:last-child {
+            text-align: center;
+            width: 200px;
+        }
+
+        /* Loading do botão */
+        .btn-loading {
+            position: relative;
+            color: transparent;
+        }
+
+        .btn-loading::after {
+            content: "";
+            position: absolute;
+            width: 16px;
+            height: 16px;
+            top: 50%;
+            left: 50%;
+            margin-left: -8px;
+            margin-top: -8px;
+            border: 2px solid #ffffff;
+            border-radius: 50%;
+            border-top-color: transparent;
+            animation: spinner 0.8s linear infinite;
+        }
+
+        @keyframes spinner {
+            to { transform: rotate(360deg); }
+        }
+    </style>
 </head>
 <body class="rfid-custom-layout">
     <!-- Container de Toast -->
@@ -43,22 +354,22 @@
         <div class="rfid-stats">
             <div class="rfid-stat-card">
                 <i class="fas fa-tags rfid-stat-icon" style="color: var(--rfid-primary);"></i>
-                <h2 class="rfid-stat-value" id="totalEtiquetas">{{ estatisticas.total or 0 }}</h2>
+                <h2 class="rfid-stat-value" id="totalEtiquetas">0</h2>
                 <p class="rfid-stat-label">Total de Etiquetas</p>
             </div>
             <div class="rfid-stat-card">
                 <i class="fas fa-check-circle rfid-stat-icon" style="color: var(--rfid-success);"></i>
-                <h2 class="rfid-stat-value" id="etiquetasAtivas">{{ estatisticas.ativas or 0 }}</h2>
+                <h2 class="rfid-stat-value" id="etiquetasAtivas">0</h2>
                 <p class="rfid-stat-label">Etiquetas Ativas</p>
             </div>
             <div class="rfid-stat-card">
                 <i class="fas fa-times-circle rfid-stat-icon" style="color: var(--rfid-danger);"></i>
-                <h2 class="rfid-stat-value" id="etiquetasDestruidas">{{ estatisticas.destruidas or 0 }}</h2>
+                <h2 class="rfid-stat-value" id="etiquetasDestruidas">0</h2>
                 <p class="rfid-stat-label">Etiquetas Destruídas</p>
             </div>
             <div class="rfid-stat-card">
                 <i class="fas fa-percentage rfid-stat-icon" style="color: var(--rfid-info);"></i>
-                <h2 class="rfid-stat-value" id="percentualAtivas">{{ estatisticas.percentual_ativas or 0 }}%</h2>
+                <h2 class="rfid-stat-value" id="percentualAtivas">0%</h2>
                 <p class="rfid-stat-label">Taxa de Ativas</p>
             </div>
         </div>
@@ -70,10 +381,13 @@
                     <i class="fas fa-filter"></i> Filtros e Controles
                 </h3>
                 <div class="rfid-btn-group">
+                    <button class="rfid-btn rfid-btn-success" onclick="abrirModalNovaEtiqueta()">
+                        <i class="fas fa-plus"></i> Nova Etiqueta
+                    </button>
                     <button class="rfid-btn rfid-btn-primary" onclick="atualizarDados()">
                         <i class="fas fa-sync-alt"></i> Atualizar
                     </button>
-                    <button class="rfid-btn rfid-btn-success" onclick="exportarDados()">
+                    <button class="rfid-btn rfid-btn-primary" onclick="exportarDados()">
                         <i class="fas fa-file-export"></i> Exportar
                     </button>
                 </div>
@@ -125,7 +439,7 @@
             <div id="emptyState" class="rfid-empty" style="display: none;">
                 <i class="fas fa-inbox"></i>
                 <h3>Nenhuma etiqueta encontrada</h3>
-                <p>Tente ajustar os filtros</p>
+                <p>Tente ajustar os filtros ou adicione uma nova etiqueta</p>
             </div>
             
             <table class="rfid-table" id="tabelaEtiquetas" style="display: none;">
@@ -134,6 +448,7 @@
                         <th>Código RFID</th>
                         <th>Descrição</th>
                         <th>Status</th>
+                        <th>Ações</th>
                     </tr>
                 </thead>
                 <tbody id="tabelaCorpo">
@@ -153,7 +468,473 @@
         </div>
     </main>
 
+    <!-- Modal de Nova/Editar Etiqueta -->
+    <div class="modal-overlay" id="modalEtiqueta">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 class="modal-title">
+                    <i class="fas fa-tag"></i>
+                    <span id="modalTitulo">Nova Etiqueta</span>
+                </h3>
+                <button class="modal-close" onclick="fecharModal('modalEtiqueta')">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <form id="formEtiqueta" onsubmit="salvarEtiqueta(event)">
+                <div class="modal-body">
+                    <input type="hidden" id="etiquetaId" value="">
+                    
+                    <div class="form-group">
+                        <label class="form-label">
+                            Código RFID <span class="required">*</span>
+                        </label>
+                        <input type="text" 
+                               id="etiquetaCodigo" 
+                               class="form-input" 
+                               placeholder="Ex: 617061720000000018733"
+                               required>
+                        <div class="form-hint">Digite o código hexadecimal da etiqueta RFID</div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">
+                            Descrição
+                        </label>
+                        <textarea id="etiquetaDescricao" 
+                                  class="form-textarea" 
+                                  placeholder="Digite uma descrição para a etiqueta..."></textarea>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">
+                            Foto (opcional)
+                        </label>
+                        <div class="photo-upload-area" onclick="document.getElementById('etiquetaFoto').click()">
+                            <i class="fas fa-camera photo-upload-icon"></i>
+                            <p>Clique para adicionar uma foto ou arraste aqui</p>
+                            <p class="form-hint">Formatos aceitos: JPG, PNG, GIF (máx. 5MB)</p>
+                            <input type="file" 
+                                   id="etiquetaFoto" 
+                                   accept="image/*" 
+                                   style="display: none;"
+                                   onchange="previewFoto(this)">
+                            <img id="fotoPreview" class="photo-preview" style="display: none;">
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="rfid-btn btn-cancel" onclick="fecharModal('modalEtiqueta')">
+                        Cancelar
+                    </button>
+                    <button type="submit" class="rfid-btn rfid-btn-primary" id="btnSalvarEtiqueta">
+                        <i class="fas fa-save"></i> Salvar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal de Confirmação -->
+    <div class="modal-overlay confirm-modal" id="modalConfirmacao">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 class="modal-title" id="confirmTitulo">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    Confirmar Ação
+                </h3>
+                <button class="modal-close" onclick="fecharModal('modalConfirmacao')">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="confirm-icon">
+                    <i class="fas fa-question-circle" id="confirmIcon"></i>
+                </div>
+                <div class="confirm-message" id="confirmMensagem">
+                    Tem certeza que deseja realizar esta ação?
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="rfid-btn btn-cancel" onclick="fecharModal('modalConfirmacao')">
+                    Cancelar
+                </button>
+                <button type="button" class="rfid-btn" id="btnConfirmar" onclick="">
+                    Confirmar
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- JavaScript -->
     <script src="{{ url_for('static', filename='js/controle_etiquetas.js') }}"></script>
+    <script>
+        // Adicionar funções CRUD ao JavaScript existente
+        
+        // Variável para armazenar dados da foto
+        let fotoBase64 = null;
+        
+        // Função para abrir modal de nova etiqueta
+        function abrirModalNovaEtiqueta() {
+            document.getElementById('modalTitulo').textContent = 'Nova Etiqueta';
+            document.getElementById('formEtiqueta').reset();
+            document.getElementById('etiquetaId').value = '';
+            document.getElementById('fotoPreview').style.display = 'none';
+            fotoBase64 = null;
+            abrirModal('modalEtiqueta');
+        }
+        
+        // Função para abrir modal de edição
+        function editarEtiqueta(id, codigo, descricao) {
+            document.getElementById('modalTitulo').textContent = 'Editar Etiqueta';
+            document.getElementById('etiquetaId').value = id;
+            document.getElementById('etiquetaCodigo').value = codigo;
+            document.getElementById('etiquetaDescricao').value = descricao || '';
+            document.getElementById('fotoPreview').style.display = 'none';
+            fotoBase64 = null;
+            abrirModal('modalEtiqueta');
+        }
+        
+        // Função para abrir modal
+        function abrirModal(modalId) {
+            const modal = document.getElementById(modalId);
+            modal.style.display = 'block';
+            setTimeout(() => modal.classList.add('active'), 10);
+        }
+        
+        // Função para fechar modal
+        function fecharModal(modalId) {
+            const modal = document.getElementById(modalId);
+            modal.classList.remove('active');
+            setTimeout(() => modal.style.display = 'none', 300);
+        }
+        
+        // Preview da foto
+        function previewFoto(input) {
+            if (input.files && input.files[0]) {
+                const reader = new FileReader();
+                
+                // Validar tamanho do arquivo (5MB)
+                if (input.files[0].size > 5 * 1024 * 1024) {
+                    showToast('A foto deve ter no máximo 5MB', 'error');
+                    input.value = '';
+                    return;
+                }
+                
+                reader.onload = function(e) {
+                    document.getElementById('fotoPreview').src = e.target.result;
+                    document.getElementById('fotoPreview').style.display = 'block';
+                    
+                    // Extrair apenas a parte base64 (remover o prefixo data:image/...;base64,)
+                    const base64String = e.target.result.split(',')[1];
+                    fotoBase64 = base64String;
+                };
+                
+                reader.readAsDataURL(input.files[0]);
+            }
+        }
+        
+        // Salvar etiqueta (criar ou editar)
+        async function salvarEtiqueta(event) {
+            event.preventDefault();
+            
+            const id = document.getElementById('etiquetaId').value;
+            const codigo = document.getElementById('etiquetaCodigo').value.trim();
+            const descricao = document.getElementById('etiquetaDescricao').value.trim();
+            
+            if (!codigo) {
+                showToast('O código da etiqueta é obrigatório', 'error');
+                return;
+            }
+            
+            const btnSalvar = document.getElementById('btnSalvarEtiqueta');
+            btnSalvar.classList.add('btn-loading');
+            btnSalvar.disabled = true;
+            
+            try {
+                let response;
+                const dados = {
+                    EtiquetaRFID_hex: codigo,
+                    Descricao: descricao
+                };
+                
+                if (fotoBase64) {
+                    dados.Foto = fotoBase64;
+                }
+                
+                if (id) {
+                    // Editar etiqueta existente
+                    response = await fetch(`/RFID/api/etiquetas/${id}`, {
+                        method: 'PUT',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(dados)
+                    });
+                } else {
+                    // Criar nova etiqueta
+                    response = await fetch('/RFID/api/etiquetas', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(dados)
+                    });
+                }
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    showToast(
+                        id ? 'Etiqueta atualizada com sucesso!' : 'Etiqueta criada com sucesso!', 
+                        'success'
+                    );
+                    fecharModal('modalEtiqueta');
+                    carregarDados(true);
+                    atualizarEstatisticas();
+                } else {
+                    showToast(result.error || 'Erro ao salvar etiqueta', 'error');
+                }
+            } catch (error) {
+                console.error('Erro:', error);
+                showToast('Erro ao salvar etiqueta', 'error');
+            } finally {
+                btnSalvar.classList.remove('btn-loading');
+                btnSalvar.disabled = false;
+            }
+        }
+        
+        // Destruir etiqueta
+        function destruirEtiqueta(id, codigo) {
+            document.getElementById('confirmTitulo').innerHTML = '<i class="fas fa-trash"></i> Destruir Etiqueta';
+            document.getElementById('confirmIcon').className = 'fas fa-exclamation-triangle';
+            document.getElementById('confirmIcon').style.color = 'var(--rfid-danger)';
+            document.getElementById('confirmMensagem').innerHTML = 
+                `Tem certeza que deseja marcar a etiqueta <strong>${codigo}</strong> como destruída?<br>
+                 <small>Esta ação pode ser revertida posteriormente.</small>`;
+            
+            const btnConfirmar = document.getElementById('btnConfirmar');
+            btnConfirmar.className = 'rfid-btn rfid-btn-danger';
+            btnConfirmar.innerHTML = '<i class="fas fa-trash"></i> Destruir';
+            btnConfirmar.onclick = async function() {
+                btnConfirmar.classList.add('btn-loading');
+                btnConfirmar.disabled = true;
+                
+                try {
+                    const response = await fetch(`/RFID/api/etiquetas/${id}/destruir`, {
+                        method: 'POST'
+                    });
+                    
+                    const result = await response.json();
+                    
+                    if (result.success) {
+                        showToast('Etiqueta marcada como destruída', 'success');
+                        fecharModal('modalConfirmacao');
+                        carregarDados(true);
+                        atualizarEstatisticas();
+                    } else {
+                        showToast(result.error || 'Erro ao destruir etiqueta', 'error');
+                    }
+                } catch (error) {
+                    console.error('Erro:', error);
+                    showToast('Erro ao destruir etiqueta', 'error');
+                } finally {
+                    btnConfirmar.classList.remove('btn-loading');
+                    btnConfirmar.disabled = false;
+                }
+            };
+            
+            abrirModal('modalConfirmacao');
+        }
+        
+        // Restaurar etiqueta
+        function restaurarEtiqueta(id, codigo) {
+            document.getElementById('confirmTitulo').innerHTML = '<i class="fas fa-undo"></i> Restaurar Etiqueta';
+            document.getElementById('confirmIcon').className = 'fas fa-check-circle';
+            document.getElementById('confirmIcon').style.color = 'var(--rfid-success)';
+            document.getElementById('confirmMensagem').innerHTML = 
+                `Deseja restaurar a etiqueta <strong>${codigo}</strong>?<br>
+                 <small>A etiqueta voltará ao status ativo.</small>`;
+            
+            const btnConfirmar = document.getElementById('btnConfirmar');
+            btnConfirmar.className = 'rfid-btn rfid-btn-success';
+            btnConfirmar.innerHTML = '<i class="fas fa-undo"></i> Restaurar';
+            btnConfirmar.onclick = async function() {
+                btnConfirmar.classList.add('btn-loading');
+                btnConfirmar.disabled = true;
+                
+                try {
+                    const response = await fetch(`/RFID/api/etiquetas/${id}/restaurar`, {
+                        method: 'POST'
+                    });
+                    
+                    const result = await response.json();
+                    
+                    if (result.success) {
+                        showToast('Etiqueta restaurada com sucesso', 'success');
+                        fecharModal('modalConfirmacao');
+                        carregarDados(true);
+                        atualizarEstatisticas();
+                    } else {
+                        showToast(result.error || 'Erro ao restaurar etiqueta', 'error');
+                    }
+                } catch (error) {
+                    console.error('Erro:', error);
+                    showToast('Erro ao restaurar etiqueta', 'error');
+                } finally {
+                    btnConfirmar.classList.remove('btn-loading');
+                    btnConfirmar.disabled = false;
+                }
+            };
+            
+            abrirModal('modalConfirmacao');
+        }
+        
+        // Atualizar estatísticas
+        async function atualizarEstatisticas() {
+            try {
+                const response = await fetch('/RFID/api/estatisticas?force_refresh=true');
+                const result = await response.json();
+                
+                if (result.success) {
+                    const stats = result.estatisticas;
+                    document.getElementById('totalEtiquetas').textContent = stats.total || 0;
+                    document.getElementById('etiquetasAtivas').textContent = stats.ativas || 0;
+                    document.getElementById('etiquetasDestruidas').textContent = stats.destruidas || 0;
+                    document.getElementById('percentualAtivas').textContent = `${stats.percentual_ativas || 0}%`;
+                }
+            } catch (error) {
+                console.error('Erro ao atualizar estatísticas:', error);
+            }
+        }
+        
+        // Modificar a função renderizarTabela para incluir botões de ação
+        function renderizarTabela(etiquetas) {
+            const tbody = document.getElementById("tabelaCorpo");
+            const tabela = document.getElementById("tabelaEtiquetas");
+            const emptyState = document.getElementById("emptyState");
+            const loadingState = document.getElementById("loadingState");
+            const paginacao = document.getElementById("paginacao");
+
+            loadingState.style.display = "none";
+
+            if (etiquetas.length === 0) {
+                tabela.style.display = "none";
+                paginacao.style.display = "none";
+                emptyState.style.display = "block";
+                return;
+            }
+
+            emptyState.style.display = "none";
+            tabela.style.display = "table";
+            paginacao.style.display = "flex";
+
+            tbody.innerHTML = "";
+
+            etiquetas.forEach((etiqueta) => {
+                const tr = document.createElement("tr");
+
+                // Determinar status baseado no campo ativa do backend
+                let statusBadge;
+                let statusTooltip = "";
+                let acoesBtns = '';
+                
+                // Usar o campo 'ativa' que vem do backend
+                if (etiqueta.ativa === false) {
+                    // Etiqueta destruída
+                    statusBadge = '<span class="rfid-badge rfid-badge-destroyed">Destruída</span>';
+                    if (etiqueta.data_destruicao_formatada) {
+                        statusTooltip = `title="Destruída em ${etiqueta.data_destruicao_formatada}"`;
+                    }
+                    
+                    // Ações para etiqueta destruída
+                    acoesBtns = `
+                        <button class="rfid-action-btn rfid-action-btn-warning" 
+                                onclick="editarEtiqueta(${etiqueta.id_listaEtiquetasRFID}, '${etiqueta.EtiquetaRFID_hex}', '${etiqueta.Descricao || ''}')"
+                                title="Editar etiqueta">
+                            <i class="fas fa-edit"></i> Editar
+                        </button>
+                        <button class="rfid-action-btn rfid-action-btn-success" 
+                                onclick="restaurarEtiqueta(${etiqueta.id_listaEtiquetasRFID}, '${etiqueta.EtiquetaRFID_hex}')"
+                                title="Restaurar etiqueta">
+                            <i class="fas fa-undo"></i> Restaurar
+                        </button>
+                    `;
+                } else {
+                    // Etiqueta ativa
+                    statusBadge = '<span class="rfid-badge rfid-badge-active">Ativa</span>';
+                    statusTooltip = 'title="Etiqueta ativa"';
+                    
+                    // Ações para etiqueta ativa
+                    acoesBtns = `
+                        <button class="rfid-action-btn rfid-action-btn-primary" 
+                                onclick="editarEtiqueta(${etiqueta.id_listaEtiquetasRFID}, '${etiqueta.EtiquetaRFID_hex}', '${etiqueta.Descricao || ''}')"
+                                title="Editar etiqueta">
+                            <i class="fas fa-edit"></i> Editar
+                        </button>
+                        <button class="rfid-action-btn rfid-action-btn-danger" 
+                                onclick="destruirEtiqueta(${etiqueta.id_listaEtiquetasRFID}, '${etiqueta.EtiquetaRFID_hex}')"
+                                title="Destruir etiqueta">
+                            <i class="fas fa-trash"></i> Destruir
+                        </button>
+                    `;
+                }
+
+                tr.innerHTML = `
+                    <td><span class="rfid-etiqueta">${etiqueta.EtiquetaRFID_hex || "-"}</span></td>
+                    <td>${etiqueta.Descricao || "-"}</td>
+                    <td ${statusTooltip}>${statusBadge}</td>
+                    <td>
+                        <div class="rfid-actions">
+                            ${acoesBtns}
+                        </div>
+                    </td>
+                `;
+
+                // Adicionar classe visual para etiquetas destruídas
+                if (etiqueta.ativa === false) {
+                    tr.classList.add("etiqueta-destruida");
+                }
+
+                tbody.appendChild(tr);
+            });
+        }
+        
+        // Fechar modal ao clicar fora
+        window.onclick = function(event) {
+            if (event.target.classList.contains('modal-overlay')) {
+                fecharModal(event.target.id);
+            }
+        }
+        
+        // Drag and drop para upload de foto
+        const uploadArea = document.querySelector('.photo-upload-area');
+        if (uploadArea) {
+            uploadArea.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                uploadArea.classList.add('drag-over');
+            });
+            
+            uploadArea.addEventListener('dragleave', () => {
+                uploadArea.classList.remove('drag-over');
+            });
+            
+            uploadArea.addEventListener('drop', (e) => {
+                e.preventDefault();
+                uploadArea.classList.remove('drag-over');
+                
+                const files = e.dataTransfer.files;
+                if (files.length > 0) {
+                    const fileInput = document.getElementById('etiquetaFoto');
+                    fileInput.files = files;
+                    previewFoto(fileInput);
+                }
+            });
+        }
+        
+        // Carregar estatísticas ao iniciar
+        document.addEventListener("DOMContentLoaded", function () {
+            atualizarEstatisticas();
+        });
+    </script>
 </body>
 </html>
