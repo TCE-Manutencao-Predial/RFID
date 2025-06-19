@@ -519,29 +519,54 @@ function exportarDados() {
 
 // Navegação
 function navegarPara(secao) {
-  switch(secao) {
-    case 'inventarios':
-      window.location.href = '/RFID/inventarios';
-      break;
-    
-    case 'leitores':
-      // Já estamos aqui
-      break;
-    
-    case 'emprestimos':
-      window.location.href = '/RFID/emprestimos';
-      break;
-    
-    default:
-      showToast('Seção não encontrada', 'error');
-  }
+    switch(secao) {
+        case 'etiquetas':
+            // Já estamos aqui - poderia recarregar ou não fazer nada
+            // window.location.href = '/RFID/';
+            break;
+            
+        case 'inventarios':
+            window.location.href = '/RFID/inventarios';
+            break;
+        
+        case 'leitores':
+            window.location.href = '/RFID/leitores';
+            break;
+        
+        case 'emprestimos':
+            window.location.href = '/RFID/emprestimos';
+            break;
+        
+        default:
+            showToast('Seção não encontrada', 'error');
+    }
 }
+
 
 // Adicionar tooltips aos botões de navegação
 document.addEventListener('DOMContentLoaded', function() {
-  const navButtons = document.querySelectorAll('.rfid-nav-btn');
-  navButtons.forEach(btn => {
-    const texto = btn.querySelector('span').textContent;
-    btn.setAttribute('data-tooltip', texto);
-  });
+    // Adicionar data-tooltip aos botões de navegação
+    const navButtons = document.querySelectorAll('.rfid-nav-btn');
+    navButtons.forEach(btn => {
+        const texto = btn.querySelector('span').textContent;
+        btn.setAttribute('data-tooltip', texto);
+    });
+    
+    // Destacar botão da página atual
+    const currentPath = window.location.pathname;
+    
+    // Para a página principal, verificar múltiplas rotas possíveis
+    if (currentPath === '/RFID/' || 
+        currentPath === '/RFID' || 
+        currentPath === '/RFID/index' || 
+        currentPath === '/RFID/etiquetas' ||
+        currentPath.endsWith('/')) {
+        document.querySelector('.rfid-nav-btn[onclick*="etiquetas"]')?.classList.add('active');
+    } else if (currentPath.includes('inventarios')) {
+        document.querySelector('.rfid-nav-btn[onclick*="inventarios"]')?.classList.add('active');
+    } else if (currentPath.includes('leitores')) {
+        document.querySelector('.rfid-nav-btn[onclick*="leitores"]')?.classList.add('active');
+    } else if (currentPath.includes('emprestimos')) {
+        document.querySelector('.rfid-nav-btn[onclick*="emprestimos"]')?.classList.add('active');
+    }
 });
