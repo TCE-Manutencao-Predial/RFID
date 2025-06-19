@@ -200,14 +200,13 @@ function renderizarTabela(etiquetas) {
 
   tbody.innerHTML = "";
 
-  
   etiquetas.forEach((etiqueta) => {
     const tr = document.createElement("tr");
 
     // Determinar status baseado no campo ativa do backend
     let statusBadge;
     let statusTooltip = "";
-    
+
     // Usar o campo 'ativa' que vem do backend
     if (etiqueta.ativa === false) {
       // Etiqueta destruída
@@ -322,3 +321,451 @@ function mostrarErro(mensagem, detalhe = "") {
 function exportarDados() {
   showToast("Funcionalidade de exportação será implementada em breve!", "info");
 }
+
+// Adicionar funções CRUD ao JavaScript existente
+
+// Variável para armazenar dados da foto
+let fotoBase64 = null;
+
+// Função para abrir modal de nova etiqueta
+function abrirModalNovaEtiqueta() {
+  document.getElementById("modalTitulo").textContent = "Nova Etiqueta";
+  document.getElementById("formEtiqueta").reset();
+  document.getElementById("etiquetaId").value = "";
+  document.getElementById("fotoPreview").style.display = "none";
+  fotoBase64 = null;
+  abrirModal("modalEtiqueta");
+}
+
+// Função para abrir modal de edição
+function editarEtiqueta(id, codigo, descricao) {
+  document.getElementById("modalTitulo").textContent = "Editar Etiqueta";
+  document.getElementById("etiquetaId").value = id;
+  document.getElementById("etiquetaCodigo").value = codigo;
+  document.getElementById("etiquetaDescricao").value = descricao || "";
+  document.getElementById("fotoPreview").style.display = "none";
+  fotoBase64 = null;
+  abrirModal("modalEtiqueta");
+}
+
+// Função para abrir modal
+function abrirModal(modalId) {
+  const modal = document.getElementById(modalId);
+  modal.style.display = "block";
+  setTimeout(() => modal.classList.add("active"), 10);
+}
+
+// Função para fechar modal
+function fecharModal(modalId) {
+    // Verificar se o modal pode ser fechado (opcional: adicionar confirmação se houver dados não salvos)
+    const modal = document.getElementById(modalId);
+    
+    if (modalId === 'modalEtiqueta') {
+        const codigo = document.getElementById('etiquetaCodigo').value;
+        const descricao = document.getElementById('etiquetaDescricao').value;
+        
+        // Se houver dados não salvos, confirmar antes de fechar
+        if ((codigo || descricao) && !document.getElementById('etiquetaId').value) {
+            if (!confirm('Há dados não salvos. Deseja realmente fechar?')) {
+                return;
+            }
+        }
+    }
+    
+    modal.classList.remove('active');
+    setTimeout(() => modal.style.display = 'none', 300);
+}
+
+// Preview da foto
+function previewFoto(input) {
+  if (input.files && input.files[0]) {
+    const reader = new FileReader();
+
+    // Validar tamanho do arquivo (5MB)
+    if (input.files[0].size > 5 * 1024 * 1024) {
+      showToast("A foto deve ter no máximo 5MB", "error");
+      input.value = "";
+      return;
+    }
+
+    reader.onload = function (e) {
+      document.getElementById("fotoPreview").src = e.target.result;
+      document.getElementById("fotoPreview").style.display = "block";
+
+      // Extrair apenas a parte base64 (remover o prefixo data:image/...;base64,)
+      const base64String = e.target.result.split(",")[1];
+      fotoBase64 = base64String;
+    };
+
+    reader.readAsDataURL(input.files[0]);
+  }
+}
+
+// 2. ADICIONAR função para padronizar código RFID com zeros
+function padronizarCodigoRFID(codigo) {
+    // Remove espaços e converte para maiúsculas
+    codigo = codigo.trim().toUpperCase();
+    
+    // Define o tamanho padrão baseado nos exemplos (24 caracteres)
+    const TAMANHO_PADRAO = 24;
+    
+    // Se o código já tem o tamanho correto, retorna como está
+    if (codigo.length >= TAMANHO_PADRAO) {
+        return codigo.substring(0, TAMANHO_PADRAO);
+    }
+    
+    // Padrão identificado: AAA0AAAA + zeros + número
+    // Vamos verificar se o código segue o padrão inicial
+    const padraoInicial = /^[A-Z]{3}[0-9][A-Z]{4}/;
+    
+    if (padraoInicial.test(codigo)) {
+        // Código começa com o padrão correto
+        // Preenche com zeros até completar 24 caracteres
+        return codigo.padEnd(TAMANHO_PADRAO, '0');
+    } else {
+        // Se não segue o padrão mas é um número válido
+        // Assume que é apenas a parte final e adiciona o prefixo padrão
+        if (/^\d+$/.test(codigo)) {
+            const prefixo = 'AAA0AAAA';
+            const numeroZeros = TAMANHO_PADRAO - prefixo.length - codigo.length;
+            
+            if (numeroZeros > 0) {
+                return prefixo + '0'.repeat(numeroZeros) + codigo;
+            } else {
+                // Se o número é muito grande, usa apenas os últimos dígitos
+                const tamanhoNumero = TAMANHO_PADRAO - prefixo.length;
+                return prefixo + codigo.slice(-tamanhoNumero).padStart(tamanhoNumero, '0');
+            }
+        }
+        
+        // Para outros casos, apenas preenche com zeros à direita
+        return codigo.padEnd(TAMANHO_PADRAO, '0');
+    }
+}
+
+// Salvar etiqueta (criar ou editar)
+async function salvarEtiqueta(event) {
+    event.preventDefault();
+    
+    const id = document.getElementById('etiquetaId').value;
+    let codigo = document.getElementById('etiquetaCodigo').value.trim();
+    const descricao = document.getElementById('etiquetaDescricao').value.trim();
+    
+    if (!codigo) {
+        showToast('O código da etiqueta é obrigatório', 'error');
+        return;
+    }
+    
+    // APLICAR PADDING DE ZEROS
+    codigo = padronizarCodigoRFID(codigo);
+    
+    // Atualizar o campo visual para mostrar o código completo
+    document.getElementById('etiquetaCodigo').value = codigo;
+    
+    const btnSalvar = document.getElementById('btnSalvarEtiqueta');
+    btnSalvar.classList.add('btn-loading');
+    btnSalvar.disabled = true;
+    
+    try {
+        let response;
+        const dados = {
+            EtiquetaRFID_hex: codigo,
+            Descricao: descricao
+        };
+        
+        if (fotoBase64) {
+            dados.Foto = fotoBase64;
+        }
+        
+        if (id) {
+            // Editar etiqueta existente
+            response = await fetch(`/RFID/api/etiquetas/${id}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(dados)
+            });
+        } else {
+            // Criar nova etiqueta
+            response = await fetch('/RFID/api/etiquetas', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(dados)
+            });
+        }
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showToast(
+                id ? 'Etiqueta atualizada com sucesso!' : 'Etiqueta criada com sucesso!', 
+                'success'
+            );
+            fecharModal('modalEtiqueta');
+            carregarDados(true);
+            atualizarEstatisticas();
+        } else {
+            showToast(result.error || 'Erro ao salvar etiqueta', 'error');
+        }
+    } catch (error) {
+        console.error('Erro:', error);
+        showToast('Erro ao salvar etiqueta', 'error');
+    } finally {
+        btnSalvar.classList.remove('btn-loading');
+        btnSalvar.disabled = false;
+    }
+}
+
+// Destruir etiqueta
+function destruirEtiqueta(id, codigo) {
+  document.getElementById("confirmTitulo").innerHTML = '<i class="fas fa-trash"></i> Destruir Etiqueta';
+  document.getElementById("confirmIcon").className = "fas fa-exclamation-triangle";
+  document.getElementById("confirmIcon").style.color = "var(--rfid-danger)";
+  document.getElementById("confirmMensagem").innerHTML = `Tem certeza que deseja marcar a etiqueta <strong>${codigo}</strong> como destruída?<br>
+                 <small>Esta ação pode ser revertida posteriormente.</small>`;
+
+  const btnConfirmar = document.getElementById("btnConfirmar");
+  btnConfirmar.className = "rfid-btn rfid-btn-danger";
+  btnConfirmar.innerHTML = '<i class="fas fa-trash"></i> Destruir';
+  btnConfirmar.onclick = async function () {
+    btnConfirmar.classList.add("btn-loading");
+    btnConfirmar.disabled = true;
+
+    try {
+      const response = await fetch(`/RFID/api/etiquetas/${id}/destruir`, {
+        method: "POST",
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        showToast("Etiqueta marcada como destruída", "success");
+        fecharModal("modalConfirmacao");
+        carregarDados(true);
+        atualizarEstatisticas();
+      } else {
+        showToast(result.error || "Erro ao destruir etiqueta", "error");
+      }
+    } catch (error) {
+      console.error("Erro:", error);
+      showToast("Erro ao destruir etiqueta", "error");
+    } finally {
+      btnConfirmar.classList.remove("btn-loading");
+      btnConfirmar.disabled = false;
+    }
+  };
+
+  abrirModal("modalConfirmacao");
+}
+
+// Restaurar etiqueta
+function restaurarEtiqueta(id, codigo) {
+  document.getElementById("confirmTitulo").innerHTML = '<i class="fas fa-undo"></i> Restaurar Etiqueta';
+  document.getElementById("confirmIcon").className = "fas fa-check-circle";
+  document.getElementById("confirmIcon").style.color = "var(--rfid-success)";
+  document.getElementById("confirmMensagem").innerHTML = `Deseja restaurar a etiqueta <strong>${codigo}</strong>?<br>
+                 <small>A etiqueta voltará ao status ativo.</small>`;
+
+  const btnConfirmar = document.getElementById("btnConfirmar");
+  btnConfirmar.className = "rfid-btn rfid-btn-success";
+  btnConfirmar.innerHTML = '<i class="fas fa-undo"></i> Restaurar';
+  btnConfirmar.onclick = async function () {
+    btnConfirmar.classList.add("btn-loading");
+    btnConfirmar.disabled = true;
+
+    try {
+      const response = await fetch(`/RFID/api/etiquetas/${id}/restaurar`, {
+        method: "POST",
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        showToast("Etiqueta restaurada com sucesso", "success");
+        fecharModal("modalConfirmacao");
+        carregarDados(true);
+        atualizarEstatisticas();
+      } else {
+        showToast(result.error || "Erro ao restaurar etiqueta", "error");
+      }
+    } catch (error) {
+      console.error("Erro:", error);
+      showToast("Erro ao restaurar etiqueta", "error");
+    } finally {
+      btnConfirmar.classList.remove("btn-loading");
+      btnConfirmar.disabled = false;
+    }
+  };
+
+  abrirModal("modalConfirmacao");
+}
+
+// Atualizar estatísticas
+async function atualizarEstatisticas() {
+  try {
+    const response = await fetch("/RFID/api/estatisticas?force_refresh=true");
+    const result = await response.json();
+
+    if (result.success) {
+      const stats = result.estatisticas;
+      document.getElementById("totalEtiquetas").textContent = stats.total || 0;
+      document.getElementById("etiquetasAtivas").textContent = stats.ativas || 0;
+      document.getElementById("etiquetasDestruidas").textContent = stats.destruidas || 0;
+      document.getElementById("percentualAtivas").textContent = `${stats.percentual_ativas || 0}%`;
+    }
+  } catch (error) {
+    console.error("Erro ao atualizar estatísticas:", error);
+  }
+}
+
+// Modificar a função renderizarTabela para incluir botões de ação
+function renderizarTabela(etiquetas) {
+  const tbody = document.getElementById("tabelaCorpo");
+  const tabela = document.getElementById("tabelaEtiquetas");
+  const emptyState = document.getElementById("emptyState");
+  const loadingState = document.getElementById("loadingState");
+  const paginacao = document.getElementById("paginacao");
+
+  loadingState.style.display = "none";
+
+  if (etiquetas.length === 0) {
+    tabela.style.display = "none";
+    paginacao.style.display = "none";
+    emptyState.style.display = "block";
+    return;
+  }
+
+  emptyState.style.display = "none";
+  tabela.style.display = "table";
+  paginacao.style.display = "flex";
+
+  tbody.innerHTML = "";
+
+  etiquetas.forEach((etiqueta) => {
+    const tr = document.createElement("tr");
+
+    // Determinar status baseado no campo ativa do backend
+    let statusBadge;
+    let statusTooltip = "";
+    let acoesBtns = "";
+
+    // Usar o campo 'ativa' que vem do backend
+    if (etiqueta.ativa === false) {
+      // Etiqueta destruída
+      statusBadge = '<span class="rfid-badge rfid-badge-destroyed">Destruída</span>';
+      if (etiqueta.data_destruicao_formatada) {
+        statusTooltip = `title="Destruída em ${etiqueta.data_destruicao_formatada}"`;
+      }
+
+      // Ações para etiqueta destruída
+      acoesBtns = `
+                        <button class="rfid-action-btn rfid-action-btn-warning" 
+                                onclick="editarEtiqueta(${etiqueta.id_listaEtiquetasRFID}, '${etiqueta.EtiquetaRFID_hex}', '${etiqueta.Descricao || ""}')"
+                                title="Editar etiqueta">
+                            <i class="fas fa-edit"></i> Editar
+                        </button>
+                        <button class="rfid-action-btn rfid-action-btn-success" 
+                                onclick="restaurarEtiqueta(${etiqueta.id_listaEtiquetasRFID}, '${etiqueta.EtiquetaRFID_hex}')"
+                                title="Restaurar etiqueta">
+                            <i class="fas fa-undo"></i> Restaurar
+                        </button>
+                    `;
+    } else {
+      // Etiqueta ativa
+      statusBadge = '<span class="rfid-badge rfid-badge-active">Ativa</span>';
+      statusTooltip = 'title="Etiqueta ativa"';
+
+      // Ações para etiqueta ativa
+      acoesBtns = `
+                        <button class="rfid-action-btn rfid-action-btn-primary" 
+                                onclick="editarEtiqueta(${etiqueta.id_listaEtiquetasRFID}, '${etiqueta.EtiquetaRFID_hex}', '${etiqueta.Descricao || ""}')"
+                                title="Editar etiqueta">
+                            <i class="fas fa-edit"></i> Editar
+                        </button>
+                        <button class="rfid-action-btn rfid-action-btn-danger" 
+                                onclick="destruirEtiqueta(${etiqueta.id_listaEtiquetasRFID}, '${etiqueta.EtiquetaRFID_hex}')"
+                                title="Destruir etiqueta">
+                            <i class="fas fa-trash"></i> Destruir
+                        </button>
+                    `;
+    }
+
+    tr.innerHTML = `
+                    <td><span class="rfid-etiqueta">${etiqueta.EtiquetaRFID_hex || "-"}</span></td>
+                    <td>${etiqueta.Descricao || "-"}</td>
+                    <td ${statusTooltip}>${statusBadge}</td>
+                    <td>
+                        <div class="rfid-actions">
+                            ${acoesBtns}
+                        </div>
+                    </td>
+                `;
+
+    // Adicionar classe visual para etiquetas destruídas
+    if (etiqueta.ativa === false) {
+      tr.classList.add("etiqueta-destruida");
+    }
+
+    tbody.appendChild(tr);
+  });
+}
+
+// Fechar modal ao clicar fora
+/*window.onclick = function (event) {
+  if (event.target.classList.contains("modal-overlay")) {
+    fecharModal(event.target.id);
+  }
+};*/
+
+// Drag and drop para upload de foto
+const uploadArea = document.querySelector(".photo-upload-area");
+if (uploadArea) {
+  uploadArea.addEventListener("dragover", (e) => {
+    e.preventDefault();
+    uploadArea.classList.add("drag-over");
+  });
+
+  uploadArea.addEventListener("dragleave", () => {
+    uploadArea.classList.remove("drag-over");
+  });
+
+  uploadArea.addEventListener("drop", (e) => {
+    e.preventDefault();
+    uploadArea.classList.remove("drag-over");
+
+    const files = e.dataTransfer.files;
+    if (files.length > 0) {
+      const fileInput = document.getElementById("etiquetaFoto");
+      fileInput.files = files;
+      previewFoto(fileInput);
+    }
+  });
+}
+
+// Carregar estatísticas ao iniciar
+document.addEventListener("DOMContentLoaded", function () {
+  atualizarEstatisticas();
+});
+
+// 4. ADICIONAR evento para formatar código ao sair do campo (opcional)
+document.addEventListener('DOMContentLoaded', function() {
+    const campoCodigoRFID = document.getElementById('etiquetaCodigo');
+    
+    if (campoCodigoRFID) {
+        // Formatar ao sair do campo (blur)
+        campoCodigoRFID.addEventListener('blur', function() {
+            if (this.value.trim()) {
+                this.value = padronizarCodigoRFID(this.value);
+            }
+        });
+        
+        // Adicionar placeholder com exemplo
+        campoCodigoRFID.placeholder = 'Ex: AAA0AAAA0000000000002808 ou apenas 2808';
+        
+        // Adicionar atributo de tamanho máximo
+        campoCodigoRFID.maxLength = 24;
+    }
+});
