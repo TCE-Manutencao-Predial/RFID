@@ -74,9 +74,20 @@ function debounce(func, wait) {
   };
 }
 
+// FUNÇÃO QUE ESTAVA FALTANDO
+function aplicarFiltros() {
+  paginaAtual = 1; // Resetar para primeira página ao aplicar filtros
+  carregarDados();
+}
+
+// FUNÇÃO QUE ESTAVA FALTANDO (chamada pelo botão Atualizar)
+function atualizarDados() {
+  carregarDados(true, true); // force_refresh = true, showToastMessage = true
+}
+
 async function carregarDados(forceRefresh = false, showToastMessage = false) {
   mostrarLoading();
-  let response = null; // Declarar response no escopo da função
+  let response = null;
 
   try {
     const offset = (paginaAtual - 1) * registrosPorPagina;
@@ -94,7 +105,6 @@ async function carregarDados(forceRefresh = false, showToastMessage = false) {
       params.append("force_refresh", "true");
     }
 
-    // IMPORTANTE: URL corrigida com /RFID/api
     response = await fetch(`/RFID/api/etiquetas?${params}`);
 
     if (!response.ok) {
@@ -108,7 +118,6 @@ async function carregarDados(forceRefresh = false, showToastMessage = false) {
       renderizarTabela(data.etiquetas);
       atualizarPaginacao();
 
-      // Mostrar toast apenas quando solicitado (atualização manual)
       if (showToastMessage && data.etiquetas.length > 0) {
         const cacheInfo = data.from_cache ? " (do cache)" : " (atualizado)";
         showToast(`${data.etiquetas.length} etiquetas carregadas${cacheInfo}`, "success");
@@ -118,8 +127,6 @@ async function carregarDados(forceRefresh = false, showToastMessage = false) {
     }
   } catch (error) {
     console.error("Erro:", error);
-
-    // Mensagem de erro mais detalhada
     let errorMessage = "Erro ao carregar os dados";
     let detailMessage = "";
 
@@ -127,7 +134,6 @@ async function carregarDados(forceRefresh = false, showToastMessage = false) {
       errorMessage = "API não encontrada. Verifique se o servidor está rodando.";
     } else if (error.message.includes("500")) {
       errorMessage = "Erro interno do servidor.";
-      // Tentar obter mais detalhes do erro
       if (response) {
         try {
           const errorData = await response.json();
@@ -195,7 +201,7 @@ function renderizarTabela(etiquetas) {
     let statusBadge;
     let statusTooltip = "";
     
-    // Verificar se a etiqueta tem data de destruição (não null, não undefined, não string vazia)
+    // Verificar se a etiqueta tem data de destruição
     const temDataDestruicao = etiqueta.Destruida && 
                              etiqueta.Destruida !== null && 
                              etiqueta.Destruida !== "" && 
@@ -245,7 +251,7 @@ function atualizarPaginacao() {
   // Botão Anterior
   const btnAnterior = criarBotaoPagina("Anterior", paginaAtual > 1, () => {
     paginaAtual--;
-    carregarDados(); // Sem toast na paginação
+    carregarDados();
   });
   controles.appendChild(btnAnterior);
 
@@ -261,7 +267,7 @@ function atualizarPaginacao() {
   for (let i = inicioPag; i <= fimPag; i++) {
     const btn = criarBotaoPagina(i, true, () => {
       paginaAtual = i;
-      carregarDados(); // Sem toast na paginação
+      carregarDados();
     });
 
     if (i === paginaAtual) {
@@ -274,7 +280,7 @@ function atualizarPaginacao() {
   // Botão Próximo
   const btnProximo = criarBotaoPagina("Próximo", paginaAtual < totalPaginas, () => {
     paginaAtual++;
-    carregarDados(); // Sem toast na paginação
+    carregarDados();
   });
   controles.appendChild(btnProximo);
 }
