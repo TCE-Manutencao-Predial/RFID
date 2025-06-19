@@ -165,10 +165,11 @@ function obterFiltros() {
   const descricao = document.getElementById("filtroDescricao").value.trim();
   if (descricao) filtros.descricao = descricao;
 
-  const status = document.getElementById("filtroStatus").value;
-  if (status !== "") {
+    const status = document.getElementById("filtroStatus").value;
+    console.log("Valor do filtro status:", status);
+    if (status !== "") {
     filtros.destruida = status;
-  }
+    }
 
   return filtros;
 }
