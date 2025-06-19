@@ -106,7 +106,7 @@ async function carregarDados(forceRefresh = false, showToastMessage = false) {
     }
 
     const url = `/RFID/api/etiquetas?${params}`;
-    console.log("URL da requisição:", url);
+    //console.log("URL da requisição:", url);
 
     response = await fetch(url);
 
@@ -169,12 +169,12 @@ function obterFiltros() {
   if (descricao) filtros.descricao = descricao;
 
   const status = document.getElementById("filtroStatus").value;
-  console.log("Valor do filtro status:", status);
+  //console.log("Valor do filtro status:", status);
   if (status !== "") {
     filtros.destruida = status;
   }
 
-  console.log("Filtros a serem enviados:", filtros);
+  //console.log("Filtros a serem enviados:", filtros);
   return filtros;
 }
 
