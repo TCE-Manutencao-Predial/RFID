@@ -391,168 +391,46 @@
     background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
     border-radius: 4px;
     color: var(--rfid-primary);
+    padding: 2px 6px;
 }
 
+/* Badges de status - versão única e corrigida */
 .rfid-badge {
     display: inline-block;
-    padding: 4px 8px;
-    border-radius: 4px;
-    font-size: 0.85em;
-    font-weight: 500;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 0.8em;
+    font-weight: 600;
     text-align: center;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
 }
 
 .rfid-badge-active {
-    background-color: #28a745;
+    background-color: var(--rfid-success);
     color: white;
 }
 
 .rfid-badge-destroyed {
-    background-color: #dc3545;
-    color: white;
-}
-
-/* Loading State */
-.rfid-loading {
-  text-align: center;
-  padding: 60px;
-  color: #6c757d;
-}
-
-.rfid-loading i {
-  font-size: 3rem;
-  animation: spin 1s linear infinite;
-  color: var(--rfid-primary);
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-/* Empty State */
-.rfid-empty {
-  text-align: center;
-  padding: 60px;
-  color: #6c757d;
-}
-
-.rfid-empty i {
-  font-size: 4rem;
-  margin-bottom: 20px;
-  color: var(--rfid-border);
-}
-
-/* Paginação */
-.rfid-pagination {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 20px;
-  background: var(--rfid-light);
-  flex-wrap: wrap;
-  gap: 15px;
-}
-
-.rfid-pagination-info {
-  color: #6c757d;
-  font-size: 0.9rem;
-}
-
-.rfid-pagination-controls {
-  display: flex;
-  gap: 5px;
-}
-
-.rfid-page-btn {
-  padding: 8px 12px;
-  border: 1px solid var(--rfid-border);
-  background: white;
-  color: var(--rfid-dark);
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  font-weight: 500;
-}
-
-.rfid-page-btn:hover:not(:disabled) {
-  background: var(--rfid-primary);
-  color: white;
-  border-color: var(--rfid-primary);
-}
-
-.rfid-page-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.rfid-page-btn.active {
-  background: var(--rfid-primary);
-  color: white;
-  border-color: var(--rfid-primary);
-}
-
-@media (max-width: 768px) {
-  .rfid-stats {
-    grid-template-columns: 1fr;
-    gap: 15px;
-  }
-
-  .rfid-table {
-    font-size: 0.85rem;
-  }
-
-  .rfid-table th,
-  .rfid-table td {
-    padding: 10px;
-  }
-
-  .toast-container {
-    left: 10px;
-    right: 10px;
-  }
-
-  .toast {
-    min-width: unset;
-    max-width: unset;
-  }
-}
-
-/* Adicione ao arquivo controle_etiquetas.css */
-
-/* Badges de status */
-.rfid-badge {
-    display: inline-block;
-    padding: 4px 8px;
-    border-radius: 4px;
-    font-size: 0.85em;
-    font-weight: 500;
-    text-align: center;
-}
-
-.rfid-badge-destroyed {
-    background-color: #dc3545;
-    color: white;
-}
-
-.rfid-badge-active {
-    background-color: #28a745;
+    background-color: var(--rfid-danger);
     color: white;
 }
 
 /* Estilo para linhas de etiquetas destruídas */
 .etiqueta-destruida {
-    background-color: rgba(248, 215, 218, 0.3);
-    opacity: 0.8;
+    background-color: rgba(248, 215, 218, 0.25) !important;
+    opacity: 0.85;
 }
 
 .etiqueta-destruida:hover {
-    background-color: rgba(248, 215, 218, 0.5);
+    background-color: rgba(248, 215, 218, 0.4) !important;
+    opacity: 1;
 }
 
 /* Melhorar tooltips */
 [title] {
     cursor: help;
 }
+
+/* ...existing code... */
 

@@ -160,56 +160,10 @@ function obterFiltros() {
 
   const status = document.getElementById("filtroStatus").value;
   if (status !== "") {
-    filtros.destruida = status; // Corrigido: passa o valor diretamente (0 ou 1)
+    filtros.destruida = status;
   }
 
   return filtros;
-}
-
-function aplicarFiltros() {
-  paginaAtual = 1;
-  carregarDados();
-}
-
-function atualizarDados() {
-  showToast("Atualizando dados do servidor...", "info");
-  // Forçar atualização do servidor, ignorando cache
-  carregarDados(true, true);
-  atualizarEstatisticas(true);
-}
-
-async function atualizarEstatisticas(forceRefresh = false) {
-  try {
-    // Construir URL com parâmetro de força refresh se necessário
-    let url = "/RFID/api/estatisticas";
-    if (forceRefresh) {
-      url += "?force_refresh=true";
-    }
-
-    const response = await fetch(url);
-
-    if (!response.ok) {
-      throw new Error(`Erro HTTP: ${response.status}`);
-    }
-
-    const data = await response.json();
-
-    if (data.success) {
-      const stats = data.estatisticas;
-      document.getElementById("totalEtiquetas").textContent = stats.total || 0;
-      document.getElementById("etiquetasAtivas").textContent = stats.ativas || 0;
-      document.getElementById("etiquetasDestruidas").textContent = stats.destruidas || 0;
-      document.getElementById("percentualAtivas").textContent = (stats.percentual_ativas || 0) + "%";
-
-      // Mostrar informação de cache apenas em modo debug
-      if (forceRefresh && data.from_cache === false) {
-        console.log("Estatísticas atualizadas do servidor");
-      }
-    }
-  } catch (error) {
-    console.error("Erro ao atualizar estatísticas:", error);
-    // Não mostrar toast para erros de estatísticas, apenas log
-  }
 }
 
 function renderizarTabela(etiquetas) {
@@ -241,8 +195,13 @@ function renderizarTabela(etiquetas) {
     let statusBadge;
     let statusTooltip = "";
     
-    // Verificar se a etiqueta tem data de destruição
-    if (etiqueta.Destruida && etiqueta.Destruida !== null && etiqueta.Destruida !== "") {
+    // Verificar se a etiqueta tem data de destruição (não null, não undefined, não string vazia)
+    const temDataDestruicao = etiqueta.Destruida && 
+                             etiqueta.Destruida !== null && 
+                             etiqueta.Destruida !== "" && 
+                             etiqueta.Destruida !== "null";
+    
+    if (temDataDestruicao) {
       // Etiqueta destruída - tem data no campo Destruida
       statusBadge = '<span class="rfid-badge rfid-badge-destroyed">Destruída</span>';
       if (etiqueta.data_destruicao_formatada) {
@@ -263,7 +222,7 @@ function renderizarTabela(etiquetas) {
                 `;
 
     // Adicionar classe visual para etiquetas destruídas
-    if (etiqueta.Destruida && etiqueta.Destruida !== null && etiqueta.Destruida !== "") {
+    if (temDataDestruicao) {
       tr.classList.add("etiqueta-destruida");
     }
 
