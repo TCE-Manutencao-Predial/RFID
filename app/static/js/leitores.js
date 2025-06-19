@@ -555,12 +555,11 @@ document.addEventListener('DOMContentLoaded', function() {
     // Destacar botão da página atual
     const currentPath = window.location.pathname;
     
-    // Para a página principal, verificar múltiplas rotas possíveis
+    // Lógica corrigida para destacar a página atual
     if (currentPath === '/RFID/' || 
         currentPath === '/RFID' || 
         currentPath === '/RFID/index' || 
-        currentPath === '/RFID/etiquetas' ||
-        currentPath.endsWith('/')) {
+        currentPath === '/RFID/etiquetas') {
         document.querySelector('.rfid-nav-btn[onclick*="etiquetas"]')?.classList.add('active');
     } else if (currentPath.includes('inventarios')) {
         document.querySelector('.rfid-nav-btn[onclick*="inventarios"]')?.classList.add('active');
