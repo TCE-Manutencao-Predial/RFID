@@ -51,8 +51,9 @@ def listar_etiquetas():
         if request.args.get('destruida') is not None:
             try:
                 filtros['destruida'] = int(request.args.get('destruida'))
+                logger.info(f"Filtro destruida recebido: {filtros.get('destruida')}")
             except ValueError:
-                logger.error(f"Valor inválido para destruida: {request.args.get('destruida')}")        
+                logger.error(f"Valor inválido para destruida: {request.args.get('destruida')}")      
                 
         # Verificar se é uma atualização forçada
         force_refresh = request.args.get('force_refresh', '').lower() == 'true'

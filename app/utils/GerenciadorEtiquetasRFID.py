@@ -134,6 +134,10 @@ class GerenciadorEtiquetasRFID:
             
             where_clause = " AND ".join(where_conditions) if where_conditions else "1=1"
             
+            # Debug: log da query
+            self.logger.info(f"Where clause construída: {where_clause}")
+            self.logger.info(f"Parâmetros da query: {params}")
+            
             # PRIMEIRA CONEXÃO: Obter o total
             connection1 = None
             cursor1 = None
