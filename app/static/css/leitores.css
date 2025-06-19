@@ -1,0 +1,247 @@
+/* leitores.css - Estilos específicos para página de leituras RFID */
+
+/* Importar estilos base que são compartilhados */
+/* Os estilos principais já estão em etiquetas.css, mas vamos adicionar específicos para leitores */
+
+/* Badge de status de etiqueta */
+.rfid-badge-cadastrada {
+  background-color: var(--rfid-info);
+  color: white;
+}
+
+.rfid-badge-nao-cadastrada {
+  background-color: var(--rfid-warning);
+  color: #212529;
+}
+
+/* RSSI indicator */
+.rssi-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-weight: 600;
+}
+
+.rssi-value {
+  font-family: monospace;
+  font-size: 0.9em;
+}
+
+.rssi-bars {
+  display: inline-flex;
+  gap: 2px;
+  align-items: flex-end;
+}
+
+.rssi-bar {
+  width: 4px;
+  background: #ddd;
+  border-radius: 2px;
+  transition: background 0.3s;
+}
+
+.rssi-bar:nth-child(1) { height: 8px; }
+.rssi-bar:nth-child(2) { height: 12px; }
+.rssi-bar:nth-child(3) { height: 16px; }
+.rssi-bar:nth-child(4) { height: 20px; }
+
+/* Níveis de sinal RSSI */
+.rssi-excellent .rssi-bar { background: var(--rfid-success); }
+.rssi-good .rssi-bar:nth-child(-n+3) { background: var(--rfid-success); }
+.rssi-fair .rssi-bar:nth-child(-n+2) { background: var(--rfid-warning); }
+.rssi-poor .rssi-bar:nth-child(1) { background: var(--rfid-danger); }
+
+/* Filtros de data/hora */
+input[type="datetime-local"] {
+  font-family: inherit;
+}
+
+/* Detalhes da etiqueta */
+.detalhes-info {
+  background: var(--rfid-light);
+  padding: 20px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+}
+
+.detalhes-info h4 {
+  margin: 0 0 10px 0;
+  color: var(--rfid-dark);
+}
+
+.detalhes-info p {
+  margin: 5px 0;
+  color: #6c757d;
+}
+
+.detalhes-info .rfid-etiqueta {
+  padding: 4px 8px;
+}
+
+/* Histórico de leituras */
+.historico-container {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.historico-container h4 {
+  color: var(--rfid-dark);
+  margin-bottom: 15px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.historico-item {
+  background: var(--rfid-light);
+  padding: 12px;
+  border-radius: 6px;
+  margin-bottom: 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  transition: background 0.2s;
+}
+
+.historico-item:hover {
+  background: #e9ecef;
+}
+
+.historico-time {
+  font-weight: 600;
+  color: var(--rfid-dark);
+  font-size: 0.9em;
+}
+
+.historico-details {
+  display: flex;
+  gap: 15px;
+  align-items: center;
+  font-size: 0.85em;
+  color: #6c757d;
+}
+
+.historico-antena {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+/* Animação de atualização */
+.updating {
+  position: relative;
+  overflow: hidden;
+}
+
+.updating::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, 
+    transparent, 
+    rgba(0, 123, 255, 0.1), 
+    transparent
+  );
+  animation: updating-sweep 1.5s infinite;
+}
+
+@keyframes updating-sweep {
+  0% { left: -100%; }
+  100% { left: 100%; }
+}
+
+/* Indicador de leitura recente */
+.leitura-recente {
+  animation: pulse-highlight 2s ease-out;
+}
+
+@keyframes pulse-highlight {
+  0% {
+    background-color: rgba(0, 123, 255, 0.2);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+/* Botão de detalhes */
+.rfid-action-btn-info {
+  background: var(--rfid-info);
+  color: white;
+}
+
+.rfid-action-btn-info:hover {
+  background: #138496;
+  transform: translateY(-1px);
+}
+
+/* Filtros específicos para leitores */
+.rfid-filter-group select#filtroRecentes {
+  min-width: 180px;
+}
+
+/* Badge de antena */
+.antena-badge {
+  display: inline-block;
+  padding: 3px 8px;
+  background: #e9ecef;
+  border-radius: 4px;
+  font-size: 0.85em;
+  font-weight: 500;
+}
+
+/* Responsividade para tabela de leituras */
+@media (max-width: 768px) {
+  .rfid-table th:nth-child(3),
+  .rfid-table td:nth-child(3),
+  .rfid-table th:nth-child(5),
+  .rfid-table td:nth-child(5) {
+    display: none; /* Esconder Descrição e RSSI em mobile */
+  }
+  
+  .historico-details {
+    flex-direction: column;
+    gap: 5px;
+    align-items: flex-start;
+  }
+}
+
+/* Auto-refresh indicator */
+.auto-refresh-indicator {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  background: var(--rfid-primary);
+  color: white;
+  padding: 10px 15px;
+  border-radius: 20px;
+  font-size: 0.85em;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  opacity: 0.9;
+  transition: opacity 0.3s;
+}
+
+.auto-refresh-indicator:hover {
+  opacity: 1;
+}
+
+.auto-refresh-indicator i {
+  animation: spin 2s linear infinite;
+}
+
+/* Customização do datetime picker */
+.rfid-filter-input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  opacity: 0.6;
+  transition: opacity 0.2s;
+}
+
+.rfid-filter-input[type="datetime-local"]::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
+}

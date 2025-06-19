@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Leituras RFID - Sistema de monitoramento</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <!-- CSS Base -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/base.css') }}" />
+
+    <!-- Font Awesome para ícones -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+
+    <!-- CSS Específico -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/leitores.css') }}" />
+  </head>
+  <body class="rfid-custom-layout">
+    <!-- Container de Toast -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <!-- Header Customizado -->
+    <div class="rfid-custom-header">
+      <nav class="rfid-custom-nav">
+        <h1 class="rfid-system-title">
+          <i class="fas fa-broadcast-tower"></i>
+          Monitoramento RFID
+        </h1>
+
+        <!-- Botões de Navegação -->
+        <div class="rfid-nav-buttons">
+          <button class="rfid-nav-btn" onclick="navegarPara('inventarios')">
+            <i class="fas fa-boxes"></i>
+            <span>Inventários</span>
+          </button>
+          <button class="rfid-nav-btn active" onclick="navegarPara('leitores')">
+            <i class="fas fa-satellite-dish"></i>
+            <span>Leitores</span>
+          </button>
+          <button class="rfid-nav-btn" onclick="navegarPara('emprestimos')">
+            <i class="fas fa-hand-holding"></i>
+            <span>Empréstimos</span>
+          </button>
+        </div>
+      </nav>
+    </div>
+
+    <main>
+      <!-- Header da Página -->
+      <div class="rfid-page-header">
+        <h1 class="rfid-page-title">
+          <i class="fas fa-satellite-dish"></i>
+          Leituras RFID
+        </h1>
+        <p class="rfid-page-subtitle">Monitoramento e histórico de leituras das antenas RFID</p>
+      </div>
+
+      <!-- Estatísticas -->
+      <div class="rfid-stats">
+        <div class="rfid-stat-card">
+          <i class="fas fa-broadcast-tower rfid-stat-icon" style="color: var(--rfid-primary)"></i>
+          <h2 class="rfid-stat-value" id="totalLeituras">0</h2>
+          <p class="rfid-stat-label">Total de Leituras</p>
+        </div>
+        <div class="rfid-stat-card">
+          <i class="fas fa-tags rfid-stat-icon" style="color: var(--rfid-success)"></i>
+          <h2 class="rfid-stat-value" id="etiquetasUnicas">0</h2>
+          <p class="rfid-stat-label">Etiquetas Únicas</p>
+        </div>
+        <div class="rfid-stat-card">
+          <i class="fas fa-satellite rfid-stat-icon" style="color: var(--rfid-info)"></i>
+          <h2 class="rfid-stat-value" id="antenasAtivas">0</h2>
+          <p class="rfid-stat-label">Antenas Ativas</p>
+        </div>
+        <div class="rfid-stat-card">
+          <i class="fas fa-clock rfid-stat-icon" style="color: var(--rfid-warning)"></i>
+          <h2 class="rfid-stat-value" id="ultimaLeitura">--</h2>
+          <p class="rfid-stat-label">Última Leitura</p>
+        </div>
+      </div>
+
+      <!-- Controles e Filtros -->
+      <div class="rfid-controls">
+        <div class="rfid-controls-header">
+          <h3 class="rfid-controls-title"><i class="fas fa-filter"></i> Filtros e Controles</h3>
+          <div class="rfid-btn-group">
+            <button class="rfid-btn rfid-btn-primary" onclick="atualizarDados()">
+              <i class="fas fa-sync-alt"></i> Atualizar
+            </button>
+            <button class="rfid-btn rfid-btn-primary" onclick="exportarDados()">
+              <i class="fas fa-file-export"></i> Exportar
+            </button>
+          </div>
+        </div>
+
+        <div class="rfid-filters">
+          <div class="rfid-filter-group">
+            <label class="rfid-filter-label">
+              <i class="fas fa-barcode"></i> Código da Etiqueta
+            </label>
+            <input type="text" 
+                   id="filtroEtiqueta" 
+                   class="rfid-filter-input" 
+                   placeholder="Digite o código hex..." 
+                   autocomplete="off" />
+          </div>
+
+          <div class="rfid-filter-group">
+            <label class="rfid-filter-label">
+              <i class="fas fa-satellite"></i> Antena
+            </label>
+            <select id="filtroAntena" class="rfid-filter-select">
+              <option value="">Todas as Antenas</option>
+              <!-- Opções serão preenchidas dinamicamente -->
+            </select>
+          </div>
+
+          <div class="rfid-filter-group">
+            <label class="rfid-filter-label">
+              <i class="fas fa-calendar"></i> Data Inicial
+            </label>
+            <input type="datetime-local" 
+                   id="filtroDataInicio" 
+                   class="rfid-filter-input" />
+          </div>
+
+          <div class="rfid-filter-group">
+            <label class="rfid-filter-label">
+              <i class="fas fa-calendar-check"></i> Data Final
+            </label>
+            <input type="datetime-local" 
+                   id="filtroDataFim" 
+                   class="rfid-filter-input" />
+          </div>
+
+          <div class="rfid-filter-group">
+            <label class="rfid-filter-label">
+              <i class="fas fa-clock"></i> Leituras Recentes
+            </label>
+            <select id="filtroRecentes" class="rfid-filter-select">
+              <option value="">Todas</option>
+              <option value="5">Últimos 5 minutos</option>
+              <option value="15">Últimos 15 minutos</option>
+              <option value="30">Últimos 30 minutos</option>
+              <option value="60">Última hora</option>
+              <option value="1440">Últimas 24 horas</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tabela -->
+      <div class="rfid-table-container">
+        <div id="loadingState" class="rfid-loading" style="display: none">
+          <i class="fas fa-spinner"></i>
+          <p>Carregando leituras...</p>
+        </div>
+
+        <div id="emptyState" class="rfid-empty" style="display: none">
+          <i class="fas fa-inbox"></i>
+          <h3>Nenhuma leitura encontrada</h3>
+          <p>Tente ajustar os filtros ou aguarde novas leituras das antenas</p>
+        </div>
+
+        <table class="rfid-table" id="tabelaLeituras" style="display: none">
+          <thead>
+            <tr>
+              <th>Data/Hora</th>
+              <th>Código RFID</th>
+              <th>Descrição</th>
+              <th>Antena</th>
+              <th>RSSI</th>
+              <th>Status</th>
+              <th>Ações</th>
+            </tr>
+          </thead>
+          <tbody id="tabelaCorpo">
+            <!-- Registros serão inseridos via JavaScript -->
+          </tbody>
+        </table>
+
+        <div class="rfid-pagination" id="paginacao" style="display: none">
+          <div class="rfid-pagination-info">
+            Mostrando <span id="registroInicio">0</span> a <span id="registroFim">0</span> 
+            de <span id="registroTotal">0</span> registros
+          </div>
+          <div class="rfid-pagination-controls" id="paginacaoControles">
+            <!-- Controles de paginação serão inseridos via JavaScript -->
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- Modal de Detalhes da Etiqueta -->
+    <div class="modal-overlay" id="modalDetalhes">
+      <div class="modal">
+        <div class="modal-header">
+          <h3 class="modal-title">
+            <i class="fas fa-history"></i>
+            Histórico da Etiqueta
+          </h3>
+          <button class="modal-close" onclick="fecharModal('modalDetalhes')">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+        <div class="modal-body">
+          <div class="detalhes-info">
+            <h4>Código RFID: <span id="detalhesCodigo" class="rfid-etiqueta"></span></h4>
+            <p>Descrição: <span id="detalhesDescricao"></span></p>
+            <p>Status: <span id="detalhesStatus"></span></p>
+          </div>
+          
+          <div class="historico-container">
+            <h4><i class="fas fa-clock"></i> Histórico de Leituras</h4>
+            <div id="historicoLoading" class="rfid-loading" style="display: none">
+              <i class="fas fa-spinner"></i>
+              <p>Carregando histórico...</p>
+            </div>
+            <div id="historicoContent">
+              <!-- Histórico será carregado aqui -->
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="rfid-btn btn-cancel" onclick="fecharModal('modalDetalhes')">
+            Fechar
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- JavaScript -->
+    <script src="{{ url_for('static', filename='js/leitores.js') }}"></script>
+  </body>
+</html>
