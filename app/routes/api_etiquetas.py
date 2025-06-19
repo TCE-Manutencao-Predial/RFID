@@ -80,17 +80,31 @@ def listar_etiquetas():
             etiqueta_processada = etiqueta.copy()
             
             # Adicionar campos de status baseado na data de destruição
-            if etiqueta.get('Destruida'):
+            if etiqueta.get('Destruida') is not None:
                 etiqueta_processada['status'] = 'destruida'
                 etiqueta_processada['ativa'] = False
                 # Formatar data de destruição para exibição
                 try:
-                    if isinstance(etiqueta['Destruida'], str):
-                        data_destruicao = datetime.strptime(etiqueta['Destruida'], '%Y-%m-%d %H:%M:%S')
-                        etiqueta_processada['data_destruicao_formatada'] = data_destruicao.strftime('%d/%m/%Y às %H:%M')
+                    # Se for um objeto datetime
+                    if hasattr(etiqueta['Destruida'], 'strftime'):
+                        etiqueta_processada['data_destruicao_formatada'] = etiqueta['Destruida'].strftime('%d/%m/%Y às %H:%M')
+                    # Se for uma string
+                    elif isinstance(etiqueta['Destruida'], str):
+                        # Tentar vários formatos de data
+                        for fmt in ['%Y-%m-%d %H:%M:%S', '%a, %d %b %Y %H:%M:%S GMT']:
+                            try:
+                                data_destruicao = datetime.strptime(etiqueta['Destruida'], fmt)
+                                etiqueta_processada['data_destruicao_formatada'] = data_destruicao.strftime('%d/%m/%Y às %H:%M')
+                                break
+                            except ValueError:
+                                continue
+                        else:
+                            # Se nenhum formato funcionou, usar a string original
+                            etiqueta_processada['data_destruicao_formatada'] = str(etiqueta['Destruida'])
                     else:
                         etiqueta_processada['data_destruicao_formatada'] = str(etiqueta['Destruida'])
-                except ValueError:
+                except Exception as e:
+                    logger.error(f"Erro ao formatar data: {e}")
                     etiqueta_processada['data_destruicao_formatada'] = str(etiqueta['Destruida'])
             else:
                 etiqueta_processada['status'] = 'ativa'
