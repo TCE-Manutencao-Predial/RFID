@@ -7,15 +7,15 @@
 
     <!-- CSS Base -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/base.css') }}" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/etiquetas.css') }}" />
 
     <!-- Font Awesome para ícones -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
 
     <!-- CSS Específico -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/leitores.css') }}" />
-
   </head>
-  
+
   <body class="rfid-custom-layout">
     <!-- Container de Toast -->
     <div class="toast-container" id="toastContainer"></div>
@@ -30,11 +30,15 @@
 
         <!-- Botões de Navegação -->
         <div class="rfid-nav-buttons">
+          <button class="rfid-nav-btn active" onclick="navegarPara('etiquetas')">
+            <i class="fas fa-tags"></i>
+            <span>Etiquetas</span>
+          </button>
           <button class="rfid-nav-btn" onclick="navegarPara('inventarios')">
             <i class="fas fa-boxes"></i>
             <span>Inventários</span>
           </button>
-          <button class="rfid-nav-btn active" onclick="navegarPara('leitores')">
+          <button class="rfid-nav-btn" onclick="navegarPara('leitores')">
             <i class="fas fa-satellite-dish"></i>
             <span>Leitores</span>
           </button>
@@ -85,31 +89,19 @@
         <div class="rfid-controls-header">
           <h3 class="rfid-controls-title"><i class="fas fa-filter"></i> Filtros e Controles</h3>
           <div class="rfid-btn-group">
-            <button class="rfid-btn rfid-btn-primary" onclick="atualizarDados()">
-              <i class="fas fa-sync-alt"></i> Atualizar
-            </button>
-            <button class="rfid-btn rfid-btn-primary" onclick="exportarDados()">
-              <i class="fas fa-file-export"></i> Exportar
-            </button>
+            <button class="rfid-btn rfid-btn-primary" onclick="atualizarDados()"><i class="fas fa-sync-alt"></i> Atualizar</button>
+            <button class="rfid-btn rfid-btn-primary" onclick="exportarDados()"><i class="fas fa-file-export"></i> Exportar</button>
           </div>
         </div>
 
         <div class="rfid-filters">
           <div class="rfid-filter-group">
-            <label class="rfid-filter-label">
-              <i class="fas fa-barcode"></i> Código da Etiqueta
-            </label>
-            <input type="text" 
-                   id="filtroEtiqueta" 
-                   class="rfid-filter-input" 
-                   placeholder="Digite o código hex..." 
-                   autocomplete="off" />
+            <label class="rfid-filter-label"> <i class="fas fa-barcode"></i> Código da Etiqueta </label>
+            <input type="text" id="filtroEtiqueta" class="rfid-filter-input" placeholder="Digite o código hex..." autocomplete="off" />
           </div>
 
           <div class="rfid-filter-group">
-            <label class="rfid-filter-label">
-              <i class="fas fa-satellite"></i> Antena
-            </label>
+            <label class="rfid-filter-label"> <i class="fas fa-satellite"></i> Antena </label>
             <select id="filtroAntena" class="rfid-filter-select">
               <option value="">Todas as Antenas</option>
               <!-- Opções serão preenchidas dinamicamente -->
@@ -117,27 +109,17 @@
           </div>
 
           <div class="rfid-filter-group">
-            <label class="rfid-filter-label">
-              <i class="fas fa-calendar"></i> Data Inicial
-            </label>
-            <input type="datetime-local" 
-                   id="filtroDataInicio" 
-                   class="rfid-filter-input" />
+            <label class="rfid-filter-label"> <i class="fas fa-calendar"></i> Data Inicial </label>
+            <input type="datetime-local" id="filtroDataInicio" class="rfid-filter-input" />
           </div>
 
           <div class="rfid-filter-group">
-            <label class="rfid-filter-label">
-              <i class="fas fa-calendar-check"></i> Data Final
-            </label>
-            <input type="datetime-local" 
-                   id="filtroDataFim" 
-                   class="rfid-filter-input" />
+            <label class="rfid-filter-label"> <i class="fas fa-calendar-check"></i> Data Final </label>
+            <input type="datetime-local" id="filtroDataFim" class="rfid-filter-input" />
           </div>
 
           <div class="rfid-filter-group">
-            <label class="rfid-filter-label">
-              <i class="fas fa-clock"></i> Leituras Recentes
-            </label>
+            <label class="rfid-filter-label"> <i class="fas fa-clock"></i> Leituras Recentes </label>
             <select id="filtroRecentes" class="rfid-filter-select">
               <option value="">Todas</option>
               <option value="5">Últimos 5 minutos</option>
@@ -182,8 +164,7 @@
 
         <div class="rfid-pagination" id="paginacao" style="display: none">
           <div class="rfid-pagination-info">
-            Mostrando <span id="registroInicio">0</span> a <span id="registroFim">0</span> 
-            de <span id="registroTotal">0</span> registros
+            Mostrando <span id="registroInicio">0</span> a <span id="registroFim">0</span> de <span id="registroTotal">0</span> registros
           </div>
           <div class="rfid-pagination-controls" id="paginacaoControles">
             <!-- Controles de paginação serão inseridos via JavaScript -->
@@ -210,7 +191,7 @@
             <p>Descrição: <span id="detalhesDescricao"></span></p>
             <p>Status: <span id="detalhesStatus"></span></p>
           </div>
-          
+
           <div class="historico-container">
             <h4><i class="fas fa-clock"></i> Histórico de Leituras</h4>
             <div id="historicoLoading" class="rfid-loading" style="display: none">
@@ -223,9 +204,7 @@
           </div>
         </div>
         <div class="modal-footer">
-          <button type="button" class="rfid-btn btn-cancel" onclick="fecharModal('modalDetalhes')">
-            Fechar
-          </button>
+          <button type="button" class="rfid-btn btn-cancel" onclick="fecharModal('modalDetalhes')">Fechar</button>
         </div>
       </div>
     </div>
