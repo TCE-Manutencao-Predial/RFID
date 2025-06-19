@@ -995,7 +995,6 @@
     transform: rotate(360deg);
   }
 }
-/* ADICIONAR AO ARQUIVO controle_etiquetas.css */
 
 /* Botões de navegação do header */
 .rfid-nav-buttons {
@@ -1131,8 +1130,6 @@
     transform: translateX(-50%) translateY(2px);
   }
 }
-
-/* ADICIONAR AO ARQUIVO controle_etiquetas.css */
 
 /* Estado ativo para botões de navegação */
 .rfid-nav-btn.active {

@@ -9,7 +9,7 @@ logger = logging.getLogger('controlerfid.web')
 @web_bp.route('/index')
 @web_bp.route('/index.html')
 @web_bp.route('/etiquetas')
-def controle_etiquetas():
+def etiquetas():
     """Página principal de controle de etiquetas RFID."""
     try:
         gerenciador = current_app.config.get('GERENCIADOR_RFID')
@@ -21,7 +21,7 @@ def controle_etiquetas():
         stats_result = gerenciador.obter_estatisticas()
         estatisticas = stats_result.get('estatisticas', {})
         
-        return render_template('controle_etiquetas.html', estatisticas=estatisticas)
+        return render_template('etiquetas.html', estatisticas=estatisticas)
     
     except Exception as e:
         logger.error(f"Erro ao carregar página de etiquetas: {e}")
