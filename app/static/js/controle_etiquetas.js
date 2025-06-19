@@ -159,7 +159,9 @@ function obterFiltros() {
   if (descricao) filtros.descricao = descricao;
 
   const status = document.getElementById("filtroStatus").value;
-  if (status !== "") filtros.destruida = status;
+  if (status !== "") {
+    filtros.destruida = status; // Corrigido: passa o valor diretamente (0 ou 1)
+  }
 
   return filtros;
 }
@@ -239,14 +241,17 @@ function renderizarTabela(etiquetas) {
     let statusBadge;
     let statusTooltip = "";
     
-    if (etiqueta.Destruida) {
+    // Verificar se a etiqueta tem data de destruição
+    if (etiqueta.Destruida && etiqueta.Destruida !== null && etiqueta.Destruida !== "") {
       // Etiqueta destruída - tem data no campo Destruida
       statusBadge = '<span class="rfid-badge rfid-badge-destroyed">Destruída</span>';
       if (etiqueta.data_destruicao_formatada) {
         statusTooltip = `title="Destruída em ${etiqueta.data_destruicao_formatada}"`;
+      } else {
+        statusTooltip = `title="Destruída em ${etiqueta.Destruida}"`;
       }
     } else {
-      // Etiqueta ativa - campo Destruida é NULL
+      // Etiqueta ativa - campo Destruida é NULL ou vazio
       statusBadge = '<span class="rfid-badge rfid-badge-active">Ativa</span>';
       statusTooltip = 'title="Etiqueta ativa"';
     }
@@ -258,7 +263,7 @@ function renderizarTabela(etiquetas) {
                 `;
 
     // Adicionar classe visual para etiquetas destruídas
-    if (etiqueta.Destruida) {
+    if (etiqueta.Destruida && etiqueta.Destruida !== null && etiqueta.Destruida !== "") {
       tr.classList.add("etiqueta-destruida");
     }
 
@@ -351,4 +356,41 @@ function mostrarErro(mensagem, detalhe = "") {
 
 function exportarDados() {
   showToast("Funcionalidade de exportação será implementada em breve!", "info");
+}
+
+/* Adicione ao arquivo controle_etiquetas.css */
+
+/* Badges de status */
+.rfid-badge {
+    display: inline-block;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 0.85em;
+    font-weight: 500;
+    text-align: center;
+}
+
+.rfid-badge-destroyed {
+    background-color: #dc3545;
+    color: white;
+}
+
+.rfid-badge-active {
+    background-color: #28a745;
+    color: white;
+}
+
+/* Estilo para linhas de etiquetas destruídas */
+.etiqueta-destruida {
+    background-color: rgba(248, 215, 218, 0.3);
+    opacity: 0.8;
+}
+
+.etiqueta-destruida:hover {
+    background-color: rgba(248, 215, 218, 0.5);
+}
+
+/* Melhorar tooltips */
+[title] {
+    cursor: help;
 }
