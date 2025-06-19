@@ -88,7 +88,6 @@ function atualizarDados() {
 async function carregarDados(forceRefresh = false, showToastMessage = false) {
   mostrarLoading();
   let response = null;
-
   try {
     const offset = (paginaAtual - 1) * registrosPorPagina;
     const filtros = obterFiltros();
@@ -120,6 +119,7 @@ async function carregarDados(forceRefresh = false, showToastMessage = false) {
       //console.log("Dados recebidos:", data); // Debug para verificar os dados
       totalRegistros = data.total;
       renderizarTabela(data.etiquetas);
+      window.scrollTo(0, lastScrollY); // restaura posição
       atualizarPaginacao();
 
       if (showToastMessage && data.etiquetas.length > 0) {
@@ -206,6 +206,7 @@ function renderizarTabela(etiquetas) {
     // Determinar status baseado no campo ativa do backend
     let statusBadge;
     let statusTooltip = "";
+    let acoesBtns = "";
 
     // Usar o campo 'ativa' que vem do backend
     if (etiqueta.ativa === false) {
@@ -214,16 +215,49 @@ function renderizarTabela(etiquetas) {
       if (etiqueta.data_destruicao_formatada) {
         statusTooltip = `title="Destruída em ${etiqueta.data_destruicao_formatada}"`;
       }
+
+      // Ações para etiqueta destruída
+      acoesBtns = `
+                        <button class="rfid-action-btn rfid-action-btn-warning" 
+                                onclick="editarEtiqueta(${etiqueta.id_listaEtiquetasRFID}, '${etiqueta.EtiquetaRFID_hex}', '${etiqueta.Descricao || ""}')"
+                                title="Editar etiqueta">
+                            <i class="fas fa-edit"></i> Editar
+                        </button>
+                        <button class="rfid-action-btn rfid-action-btn-success" 
+                                onclick="restaurarEtiqueta(${etiqueta.id_listaEtiquetasRFID}, '${etiqueta.EtiquetaRFID_hex}')"
+                                title="Restaurar etiqueta">
+                            <i class="fas fa-undo"></i> Restaurar
+                        </button>
+                    `;
     } else {
       // Etiqueta ativa
       statusBadge = '<span class="rfid-badge rfid-badge-active">Ativa</span>';
       statusTooltip = 'title="Etiqueta ativa"';
+
+      // Ações para etiqueta ativa
+      acoesBtns = `
+                        <button class="rfid-action-btn rfid-action-btn-primary" 
+                                onclick="editarEtiqueta(${etiqueta.id_listaEtiquetasRFID}, '${etiqueta.EtiquetaRFID_hex}', '${etiqueta.Descricao || ""}')"
+                                title="Editar etiqueta">
+                            <i class="fas fa-edit"></i> Editar
+                        </button>
+                        <button class="rfid-action-btn rfid-action-btn-danger" 
+                                onclick="destruirEtiqueta(${etiqueta.id_listaEtiquetasRFID}, '${etiqueta.EtiquetaRFID_hex}')"
+                                title="Destruir etiqueta">
+                            <i class="fas fa-trash"></i> Destruir
+                        </button>
+                    `;
     }
 
     tr.innerHTML = `
                     <td><span class="rfid-etiqueta">${etiqueta.EtiquetaRFID_hex || "-"}</span></td>
                     <td>${etiqueta.Descricao || "-"}</td>
                     <td ${statusTooltip}>${statusBadge}</td>
+                    <td>
+                        <div class="rfid-actions">
+                            ${acoesBtns}
+                        </div>
+                    </td>
                 `;
 
     // Adicionar classe visual para etiquetas destruídas
@@ -284,20 +318,28 @@ function atualizarPaginacao() {
   controles.appendChild(btnProximo);
 }
 
+let lastScrollY = 0;
+
 function criarBotaoPagina(texto, ativo, onclick) {
   const btn = document.createElement("button");
+  btn.type = "button";             // evita comportamento de submit e foco
   btn.className = "rfid-page-btn";
   btn.textContent = texto;
   btn.disabled = !ativo;
   if (ativo && onclick) {
-    btn.addEventListener("click", onclick);
+    btn.addEventListener("click", () => {
+      lastScrollY = window.scrollY; // salva posição
+      onclick();
+      btn.blur();                  // remove foco
+    });
   }
   return btn;
 }
 
 function mostrarLoading() {
   document.getElementById("loadingState").style.display = "block";
-  document.getElementById("tabelaEtiquetas").style.display = "none";
+  // NÃO oculta a tabela para não reposicionar o scroll
+  // document.getElementById("tabelaEtiquetas").style.display = "none";
   document.getElementById("emptyState").style.display = "none";
   document.getElementById("paginacao").style.display = "none";
 }

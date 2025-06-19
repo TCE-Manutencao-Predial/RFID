@@ -7,6 +7,9 @@ let totalRegistros = 0;
 let autoRefreshInterval = null;
 let antenasDisponiveis = [];
 
+// 1) Nova variável global para guardar o scroll
+let lastScrollY = 0;
+
 // Sistema de Toast (reutilizado)
 function showToast(message, type = "info", title = "") {
   const toastContainer = document.getElementById("toastContainer");
@@ -106,7 +109,6 @@ function atualizarDados() {
 async function carregarDados(forceRefresh = false, showToastMessage = false) {
   mostrarLoading();
   let response = null;
-
   try {
     const offset = (paginaAtual - 1) * registrosPorPagina;
     const filtros = obterFiltros();
@@ -144,6 +146,7 @@ async function carregarDados(forceRefresh = false, showToastMessage = false) {
       totalRegistros = data.total;
       renderizarTabela(data.leituras);
       atualizarPaginacao();
+      window.scrollTo(0, lastScrollY); // restaura a posição guardada
 
       if (showToastMessage && data.leituras.length > 0) {
         const cacheInfo = data.from_cache ? " (do cache)" : " (atualizado)";
@@ -479,20 +482,25 @@ function atualizarPaginacao() {
   controles.appendChild(btnProximo);
 }
 
+// 2) Substitua a função criarBotaoPagina por esta versão que salva o scroll
 function criarBotaoPagina(texto, ativo, onclick) {
   const btn = document.createElement("button");
   btn.className = "rfid-page-btn";
   btn.textContent = texto;
   btn.disabled = !ativo;
   if (ativo && onclick) {
-    btn.addEventListener("click", onclick);
+    btn.addEventListener("click", () => {
+      lastScrollY = window.scrollY;  // salva posição
+      onclick();
+      btn.blur();                   // remove foco
+    });
   }
   return btn;
 }
 
 function mostrarLoading() {
   document.getElementById("loadingState").style.display = "block";
-  document.getElementById("tabelaLeituras").style.display = "none";
+  // document.getElementById("tabelaLeituras").style.display = "none"; // comentado
   document.getElementById("emptyState").style.display = "none";
   document.getElementById("paginacao").style.display = "none";
 }
