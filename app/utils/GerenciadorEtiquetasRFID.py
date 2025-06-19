@@ -375,7 +375,7 @@ class GerenciadorEtiquetasRFID:
                 connection2 = self._get_connection()
                 cursor2 = connection2.cursor(dictionary=True)
                 
-                cursor2.execute("SELECT COUNT(*) as destruidas FROM etiquetasRFID WHERE Destruida = 1")
+                cursor2.execute("SELECT COUNT(*) as destruidas FROM etiquetasRFID WHERE Destruida IS NOT NULL")
                 result = cursor2.fetchone()
                 destruidas = result['destruidas'] if result and 'destruidas' in result else 0
                 
