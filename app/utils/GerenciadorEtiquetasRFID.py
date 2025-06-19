@@ -94,7 +94,7 @@ class GerenciadorEtiquetasRFID:
         Returns:
             dict: Resultado com etiquetas e total
         """
-        # Gerar chave do cache
+                # Gerar chave do cache
         cache_params = {
             'filtros': filtros or {},
             'limite': limite,
@@ -103,9 +103,11 @@ class GerenciadorEtiquetasRFID:
         cache_key = self._get_cache_key('etiquetas', cache_params)
         
         # Verificar cache primeiro (a menos que force_refresh seja True)
-        if not force_refresh:
+        # IMPORTANTE: Não usar cache quando há filtro de status para evitar inconsistências
+        if not force_refresh and not (filtros and 'destruida' in filtros):
             cached_result = self._get_from_cache(cache_key)
             if cached_result:
+                cached_result['from_cache'] = True
                 return cached_result
         
         total = 0
@@ -202,6 +204,16 @@ class GerenciadorEtiquetasRFID:
                 'offset': offset,
                 'from_cache': False
             }
+            
+            # Log para debug
+            if filtros and 'destruida' in filtros:
+                self.logger.info(f"Retornando {len(etiquetas)} etiquetas com filtro destruida={filtros['destruida']}")
+                # Verificar se há etiquetas incorretas
+                for etiq in etiquetas:
+                    if filtros['destruida'] == 1 and etiq.get('Destruida') is None:
+                        self.logger.warning(f"ATENÇÃO: Etiqueta {etiq.get('EtiquetaRFID_hex')} tem Destruida=NULL mas foi retornada com filtro destruida=1")
+                    elif filtros['destruida'] == 0 and etiq.get('Destruida') is not None:
+                        self.logger.warning(f"ATENÇÃO: Etiqueta {etiq.get('EtiquetaRFID_hex')} tem Destruida={etiq.get('Destruida')} mas foi retornada com filtro destruida=0")
             
             # Armazenar no cache
             self._set_cache(cache_key, result)
