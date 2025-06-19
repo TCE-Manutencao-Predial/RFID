@@ -20,7 +20,7 @@ def listar_etiquetas():
         - destruida: filtro por status (0=ativas, 1=destruídas)
     """
     try:
-        logger.info("Iniciando listagem de etiquetas")
+        #logger.info("Iniciando listagem de etiquetas")
         
         gerenciador = current_app.config.get('GERENCIADOR_RFID')
         if not gerenciador:
@@ -51,7 +51,7 @@ def listar_etiquetas():
         if request.args.get('destruida') is not None:
             try:
                 filtros['destruida'] = int(request.args.get('destruida'))
-                logger.info(f"Filtro destruida recebido: {filtros.get('destruida')}")
+                #logger.info(f"Filtro destruida recebido: {filtros.get('destruida')}")
             except ValueError:
                 logger.error(f"Valor inválido para destruida: {request.args.get('destruida')}")      
                 
@@ -117,7 +117,7 @@ def listar_etiquetas():
         # Atualizar resultado com etiquetas processadas
         resultado['etiquetas'] = etiquetas_processadas
         
-        logger.info(f"Etiquetas obtidas com sucesso. Total: {resultado.get('total', 0)}")
+        #logger.info(f"Etiquetas obtidas com sucesso. Total: {resultado.get('total', 0)}")
         return jsonify(resultado)
     
     except Exception as e:

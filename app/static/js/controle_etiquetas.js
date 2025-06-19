@@ -117,7 +117,7 @@ async function carregarDados(forceRefresh = false, showToastMessage = false) {
     const data = await response.json();
 
     if (data.success) {
-      console.log("Dados recebidos:", data); // Debug para verificar os dados
+      //console.log("Dados recebidos:", data); // Debug para verificar os dados
       totalRegistros = data.total;
       renderizarTabela(data.etiquetas);
       atualizarPaginacao();

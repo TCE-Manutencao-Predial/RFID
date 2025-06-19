@@ -137,8 +137,8 @@ class GerenciadorEtiquetasRFID:
             where_clause = " AND ".join(where_conditions) if where_conditions else "1=1"
             
             # Debug: log da query
-            self.logger.info(f"Where clause construída: {where_clause}")
-            self.logger.info(f"Parâmetros da query: {params}")
+            #self.logger.info(f"Where clause construída: {where_clause}")
+            #self.logger.info(f"Parâmetros da query: {params}")
             
             # PRIMEIRA CONEXÃO: Obter o total
             connection1 = None
@@ -207,7 +207,7 @@ class GerenciadorEtiquetasRFID:
             
             # Log para debug
             if filtros and 'destruida' in filtros:
-                self.logger.info(f"Retornando {len(etiquetas)} etiquetas com filtro destruida={filtros['destruida']}")
+                #self.logger.info(f"Retornando {len(etiquetas)} etiquetas com filtro destruida={filtros['destruida']}")
                 # Verificar se há etiquetas incorretas
                 for etiq in etiquetas:
                     if filtros['destruida'] == 1 and etiq.get('Destruida') is None:
