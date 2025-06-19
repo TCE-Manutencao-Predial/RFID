@@ -65,8 +65,13 @@ document.addEventListener("DOMContentLoaded", function () {
 
 function inicializarEventos() {
   // Eventos de filtro
-  document.getElementById("filtroEtiqueta").addEventListener("input", debounce(aplicarFiltros, 500));
-  document.getElementById("filtroAntena").addEventListener("change", aplicarFiltros);
+  document.getElementById("filtroEtiqueta")
+    .addEventListener("input", debounce(aplicarFiltros, 500));
+  // Adicionado listener para descrição
+  document.getElementById("filtroDescricao")
+    .addEventListener("input", debounce(aplicarFiltros, 500));
+  document.getElementById("filtroAntena")
+    .addEventListener("change", aplicarFiltros);
   document.getElementById("filtroDataInicio").addEventListener("change", aplicarFiltros);
   document.getElementById("filtroDataFim").addEventListener("change", aplicarFiltros);
   document.getElementById("filtroRecentes").addEventListener("change", aplicarFiltroRecentes);
@@ -167,6 +172,10 @@ function obterFiltros() {
 
   const etiqueta = document.getElementById("filtroEtiqueta").value.trim();
   if (etiqueta) filtros.etiqueta = etiqueta;
+
+  // Novo campo descrição
+  const descricao = document.getElementById("filtroDescricao").value.trim();
+  if (descricao) filtros.descricao = descricao;
 
   const antena = document.getElementById("filtroAntena").value;
   if (antena) filtros.antena = antena;
