@@ -521,8 +521,7 @@ function exportarDados() {
 function navegarPara(secao) {
     switch(secao) {
         case 'etiquetas':
-            // Já estamos aqui - poderia recarregar ou não fazer nada
-            // window.location.href = '/RFID/';
+            window.location.href = '/RFID/';
             break;
             
         case 'inventarios':
@@ -530,7 +529,8 @@ function navegarPara(secao) {
             break;
         
         case 'leitores':
-            window.location.href = '/RFID/leitores';
+            // Já estamos aqui - poderia recarregar ou não fazer nada
+            // window.location.href = '/RFID/leitores';
             break;
         
         case 'emprestimos':

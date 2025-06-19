@@ -771,9 +771,13 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 
-// Função de navegação para os botões do header
 function navegarPara(secao) {
     switch(secao) {
+        case 'etiquetas':
+            // Já estamos aqui - poderia recarregar ou não fazer nada
+            // window.location.href = '/RFID/';
+            break;
+            
         case 'inventarios':
             window.location.href = '/RFID/inventarios';
             break;
