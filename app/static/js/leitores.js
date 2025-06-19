@@ -173,16 +173,21 @@ function obterFiltros() {
   const etiqueta = document.getElementById("filtroEtiqueta").value.trim();
   if (etiqueta) filtros.etiqueta = etiqueta;
 
-  // Novo campo descrição
   const descricao = document.getElementById("filtroDescricao").value.trim();
   if (descricao) filtros.descricao = descricao;
 
   const antena = document.getElementById("filtroAntena").value;
-  if (antena) filtros.antena = antena;
+  if (antena) {
+    // Verificar se é filtro por leitor completo
+    if (antena.startsWith('leitor:')) {
+      filtros.codigo_leitor = antena.substring(7); // Remove 'leitor:'
+    } else {
+      filtros.antena = antena;
+    }
+  }
 
   const dataInicio = document.getElementById("filtroDataInicio").value;
   if (dataInicio) {
-    // Converter para formato esperado pela API
     filtros.horario_inicio = dataInicio.replace('T', ' ') + ':00';
   }
 
@@ -255,11 +260,14 @@ function renderizarTabela(leituras) {
       </div>
     `;
 
+    // Usar antena_completa se disponível, senão manter formato antigo
+    const antenaDisplay = leitura.antena_completa || `Antena ${leitura.antena}`;
+
     tr.innerHTML = `
       <td>${leitura.horario_formatado || leitura.horario}</td>
       <td><span class="rfid-etiqueta">${leitura.etiqueta_hex}</span></td>
       <td>${leitura.descricao_equipamento || '-'}</td>
-      <td><span class="antena-badge">Antena ${leitura.antena}</span></td>
+      <td><span class="antena-badge">${antenaDisplay}</span></td>
       <td>${rssiIndicator}</td>
       <td>${statusBadge}</td>
       <td>
@@ -297,13 +305,46 @@ async function carregarAntenas() {
       // Limpar e adicionar opção padrão
       select.innerHTML = '<option value="">Todas as Antenas</option>';
       
-      // Adicionar antenas
+      // Agrupar antenas por código do leitor
+      const antenasAgrupadas = {};
       data.antenas.forEach(antena => {
-        const option = document.createElement('option');
-        option.value = antena.Antena;
-        option.textContent = `Antena ${antena.Antena} (${antena.total_leituras} leituras)`;
-        select.appendChild(option);
+        if (!antenasAgrupadas[antena.codigo_leitor]) {
+          antenasAgrupadas[antena.codigo_leitor] = [];
+        }
+        antenasAgrupadas[antena.codigo_leitor].push(antena);
       });
+      
+      // Adicionar antenas agrupadas
+      Object.keys(antenasAgrupadas).sort().forEach(codigoLeitor => {
+        // Criar optgroup para cada leitor
+        const optgroup = document.createElement('optgroup');
+        optgroup.label = `Leitor ${codigoLeitor}`;
+        
+        antenasAgrupadas[codigoLeitor].forEach(antena => {
+          const option = document.createElement('option');
+          option.value = antena.antena_completa; // Usar formato completo
+          option.textContent = `${antena.antena_completa} (${antena.total_leituras.toLocaleString('pt-BR')} leituras)`;
+          optgroup.appendChild(option);
+        });
+        
+        select.appendChild(optgroup);
+      });
+      
+      // Adicionar opção de filtrar por leitor completo
+      const leitoresUnicos = Object.keys(antenasAgrupadas);
+      if (leitoresUnicos.length > 1) {
+        const separador = document.createElement('option');
+        separador.disabled = true;
+        separador.textContent = '─────────────';
+        select.appendChild(separador);
+        
+        leitoresUnicos.forEach(codigoLeitor => {
+          const option = document.createElement('option');
+          option.value = `leitor:${codigoLeitor}`;
+          option.textContent = `Todas do Leitor ${codigoLeitor}`;
+          select.appendChild(option);
+        });
+      }
     }
   } catch (error) {
     console.error("Erro ao carregar antenas:", error);
@@ -386,6 +427,11 @@ async function carregarHistoricoEtiqueta(codigo) {
       
       data.leituras.forEach(leitura => {
         const rssiClass = getRSSIClass(leitura.RSSI);
+        // Criar formato completo da antena se disponível
+        const antenaDisplay = leitura.CodigoLeitor 
+          ? `[${leitura.CodigoLeitor}] A${leitura.Antena}` 
+          : `Antena ${leitura.Antena}`;
+          
         html += `
           <div class="historico-item">
             <div class="historico-time">
@@ -395,7 +441,7 @@ async function carregarHistoricoEtiqueta(codigo) {
             <div class="historico-details">
               <div class="historico-antena">
                 <i class="fas fa-satellite"></i>
-                Antena ${leitura.Antena}
+                ${antenaDisplay}
               </div>
               <div class="rssi-indicator ${rssiClass}">
                 RSSI: ${leitura.RSSI}

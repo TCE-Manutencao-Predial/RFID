@@ -292,7 +292,7 @@ def obter_leituras_recentes(minutos):
 @api_leitores_bp.route('/leituras/antenas', methods=['GET'])
 def listar_antenas():
     """
-    Lista todas as antenas que registraram leituras.
+    Lista todas as antenas que registraram leituras, agrupadas por leitor.
     """
     try:
         gerenciador = current_app.config.get('GERENCIADOR_LEITORES')
@@ -301,45 +301,18 @@ def listar_antenas():
             gerenciador = GerenciadorLeitoresRFID.get_instance()
             current_app.config['GERENCIADOR_LEITORES'] = gerenciador
         
-        connection = None
-        cursor = None
+        force_refresh = request.args.get('force_refresh', '').lower() == 'true'
         
-        try:
-            connection = gerenciador._get_connection()
-            cursor = connection.cursor(dictionary=True)
-            
-            # Query para obter antenas únicas com contagem
-            query = """
-                SELECT 
-                    Antena,
-                    COUNT(*) as total_leituras,
-                    COUNT(DISTINCT EtiquetaRFID_hex) as etiquetas_unicas,
-                    MAX(Horario) as ultima_leitura
-                FROM leitoresRFID
-                WHERE RSSI != 0
-                GROUP BY Antena
-                ORDER BY Antena
-            """
-            
-            cursor.execute(query)
-            antenas = cursor.fetchall()
-            
-            # Formatar datas
-            for antena in antenas:
-                if antena['ultima_leitura']:
-                    antena['ultima_leitura_formatada'] = antena['ultima_leitura'].strftime('%d/%m/%Y %H:%M')
-            
+        # Usar o novo método
+        resultado = gerenciador.obter_antenas_com_leitor(force_refresh=force_refresh)
+        
+        if not resultado.get('success', False):
             return jsonify({
-                'success': True,
-                'antenas': antenas,
-                'total': len(antenas)
-            })
-            
-        finally:
-            if cursor:
-                cursor.close()
-            if connection:
-                connection.close()
+                'success': False,
+                'error': resultado.get('error', 'Erro ao listar antenas')
+            }), 500
+        
+        return jsonify(resultado)
     
     except Exception as e:
         logger.error(f"Erro ao listar antenas: {str(e)}")
@@ -347,7 +320,7 @@ def listar_antenas():
             'success': False,
             'error': str(e)
         }), 500
-
+        
 # Rota de teste/debug
 @api_leitores_bp.route('/leituras/test', methods=['GET'])
 def test_api_leitores():

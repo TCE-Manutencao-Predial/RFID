@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 from ..config import MYSQL_CONFIG
 import json
 import hashlib
+import re
 
 class GerenciadorLeitoresRFID:
     """Gerenciador para operações com leituras RFID da tabela leitoresRFID."""
@@ -144,14 +145,35 @@ class GerenciadorLeitoresRFID:
                     where_conditions.append("l.EtiquetaRFID_hex LIKE %s")
                     params.append(f"%{filtros['etiqueta']}%")
 
-                # <<< INSERIDO filtro por descrição
                 if filtros.get('descricao'):
                     where_conditions.append("e.Descricao LIKE %s")
                     params.append(f"%{filtros['descricao']}%")
 
+                # Filtro especial para antena com código do leitor
                 if filtros.get('antena'):
-                    where_conditions.append("l.Antena = %s")
-                    params.append(filtros['antena'])
+                    # Verificar se é formato "[XX] AY"
+                    if '[' in str(filtros['antena']) and ']' in str(filtros['antena']):
+                        # Extrair código do leitor e antena
+                        match = re.match(r'\[([^\]]+)\]\s*A?(\d+)', str(filtros['antena']))
+                        if match:
+                            codigo_leitor = match.group(1)
+                            antena_num = match.group(2)
+                            where_conditions.append("l.CodigoLeitor = %s AND l.Antena = %s")
+                            params.append(codigo_leitor)
+                            params.append(antena_num)
+                        else:
+                            # Formato inválido, usar como está
+                            where_conditions.append("l.Antena = %s")
+                            params.append(filtros['antena'])
+                    else:
+                        # Formato simples, apenas número da antena
+                        where_conditions.append("l.Antena = %s")
+                        params.append(filtros['antena'])
+                
+                # Filtro por código do leitor apenas
+                if filtros.get('codigo_leitor'):
+                    where_conditions.append("l.CodigoLeitor = %s")
+                    params.append(filtros['codigo_leitor'])
 
                 if filtros.get('horario_inicio'):
                     where_conditions.append("l.Horario >= %s")
@@ -231,6 +253,7 @@ class GerenciadorLeitoresRFID:
                         'codigo_leitor': leitura['CodigoLeitor'],
                         'horario': leitura['Horario'],
                         'antena': leitura['Antena'],
+                        'antena_completa': f"[{leitura['CodigoLeitor']}] A{leitura['Antena']}",
                         'etiqueta_hex': leitura['EtiquetaRFID_hex'],
                         'rssi': leitura['RSSI'],
                         'descricao_equipamento': leitura['DescricaoEquipamento'] or 'Sem descrição',
@@ -434,152 +457,79 @@ class GerenciadorLeitoresRFID:
                 cursor.close()
             if connection:
                 connection.close()
-
-# app/routes/api_leitores.py
-from flask import Blueprint, jsonify, request, current_app
-import logging
-import traceback
-from datetime import datetime, timedelta
-
-api_leitores_bp = Blueprint('api_leitores', __name__)
-logger = logging.getLogger('RFID.api_leitores')
-
-@api_leitores_bp.route('/leituras', methods=['GET'])
-def listar_leituras():
-    """
-    API para listar leituras RFID com paginação e filtros.
     
-    Query params:
-        - limite: número de registros por página
-        - offset: deslocamento
-        - etiqueta: filtro por código da etiqueta
-        - antena: filtro por antena
-        - horario_inicio: filtro por data/hora inicial
-        - horario_fim: filtro por data/hora final
-    """
-    try:
-        gerenciador = current_app.config.get('GERENCIADOR_LEITORES')
-        if not gerenciador:
-            # Tentar criar o gerenciador se não existir
-            from ..utils.GerenciadorLeitoresRFID import GerenciadorLeitoresRFID
-            gerenciador = GerenciadorLeitoresRFID.get_instance()
-            current_app.config['GERENCIADOR_LEITORES'] = gerenciador
+    def obter_antenas_com_leitor(self, force_refresh=False):
+        """
+        Obtém lista de antenas agrupadas por código do leitor.
         
-        # Obter parâmetros com validação
+        Returns:
+            dict: Lista de antenas com informações do leitor
+        """
+        cache_key = 'antenas_com_leitor'
+        
+        if not force_refresh:
+            cached_result = self._get_from_cache(cache_key)
+            if cached_result:
+                return cached_result
+        
         try:
-            limite = int(request.args.get('limite', 50))
-            offset = int(request.args.get('offset', 0))
-        except ValueError:
-            return jsonify({
+            connection = self._get_connection()
+            cursor = connection.cursor(dictionary=True)
+            
+            # Query para obter antenas únicas com código do leitor
+            query = """
+                SELECT 
+                    CodigoLeitor,
+                    Antena,
+                    COUNT(*) as total_leituras,
+                    COUNT(DISTINCT EtiquetaRFID_hex) as etiquetas_unicas,
+                    MAX(Horario) as ultima_leitura
+                FROM leitoresRFID
+                WHERE RSSI != 0
+                GROUP BY CodigoLeitor, Antena
+                ORDER BY CodigoLeitor, Antena
+            """
+            
+            cursor.execute(query)
+            resultados = cursor.fetchall()
+            
+            # Formatar resultados
+            antenas = []
+            for resultado in resultados:
+                antena_info = {
+                    'codigo_leitor': resultado['CodigoLeitor'],
+                    'antena': resultado['Antena'],
+                    'antena_completa': f"[{resultado['CodigoLeitor']}] A{resultado['Antena']}",
+                    'total_leituras': resultado['total_leituras'],
+                    'etiquetas_unicas': resultado['etiquetas_unicas'],
+                    'ultima_leitura': resultado['ultima_leitura']
+                }
+                
+                if resultado['ultima_leitura']:
+                    antena_info['ultima_leitura_formatada'] = resultado['ultima_leitura'].strftime('%d/%m/%Y %H:%M')
+                
+                antenas.append(antena_info)
+            
+            result = {
+                'success': True,
+                'antenas': antenas,
+                'total': len(antenas)
+            }
+            
+            # Armazenar no cache
+            self._set_cache(cache_key, result)
+            
+            return result
+            
+        except Exception as e:
+            self.logger.error(f"Erro ao obter antenas com leitor: {e}")
+            return {
                 'success': False,
-                'error': 'Parâmetros de paginação inválidos'
-            }), 400
-        
-        # Filtros
-        filtros = {}
-        if request.args.get('etiqueta'):
-            filtros['etiqueta'] = request.args.get('etiqueta')
-        if request.args.get('antena'):
-            filtros['antena'] = request.args.get('antena')
-        if request.args.get('horario_inicio'):
-            filtros['horario_inicio'] = request.args.get('horario_inicio')
-        if request.args.get('horario_fim'):
-            filtros['horario_fim'] = request.args.get('horario_fim')
-        
-        # Verificar se é uma atualização forçada
-        force_refresh = request.args.get('force_refresh', '').lower() == 'true'
-        
-        logger.info(f"Buscando leituras com filtros: {filtros}, limite: {limite}, offset: {offset}")
-        
-        # Buscar leituras
-        resultado = gerenciador.obter_leituras(
-            filtros=filtros,
-            limite=limite,
-            offset=offset,
-            force_refresh=force_refresh
-        )
-        
-        if not resultado.get('success', False):
-            logger.error(f"Erro ao obter leituras: {resultado.get('error')}")
-            return jsonify({
-                'success': False,
-                'error': resultado.get('error', 'Erro ao buscar leituras')
-            }), 500
-        
-        return jsonify(resultado)
-    
-    except Exception as e:
-        logger.error(f"Erro não tratado ao listar leituras: {str(e)}")
-        logger.error(f"Traceback: {traceback.format_exc()}")
-        return jsonify({
-            'success': False,
-            'error': f'Erro interno: {str(e)}'
-        }), 500
-
-@api_leitores_bp.route('/leituras/estatisticas', methods=['GET'])
-def obter_estatisticas_leituras():
-    """Obtém estatísticas das leituras."""
-    try:
-        gerenciador = current_app.config.get('GERENCIADOR_LEITORES')
-        if not gerenciador:
-            from ..utils.GerenciadorLeitoresRFID import GerenciadorLeitoresRFID
-            gerenciador = GerenciadorLeitoresRFID.get_instance()
-            current_app.config['GERENCIADOR_LEITORES'] = gerenciador
-        
-        # Filtros opcionais
-        filtros = {}
-        if request.args.get('horario_inicio'):
-            filtros['horario_inicio'] = request.args.get('horario_inicio')
-        if request.args.get('horario_fim'):
-            filtros['horario_fim'] = request.args.get('horario_fim')
-        
-        force_refresh = request.args.get('force_refresh', '').lower() == 'true'
-        
-        resultado = gerenciador.obter_estatisticas_leituras(
-            filtros=filtros,
-            force_refresh=force_refresh
-        )
-        
-        if not resultado.get('success', False):
-            return jsonify({
-                'success': False,
-                'error': resultado.get('error', 'Erro ao obter estatísticas')
-            }), 500
-        
-        return jsonify(resultado)
-    
-    except Exception as e:
-        logger.error(f"Erro ao obter estatísticas: {str(e)}")
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
-
-@api_leitores_bp.route('/leituras/etiqueta/<etiqueta_hex>', methods=['GET'])
-def obter_historico_etiqueta(etiqueta_hex):
-    """Obtém histórico de leituras de uma etiqueta específica."""
-    try:
-        gerenciador = current_app.config.get('GERENCIADOR_LEITORES')
-        if not gerenciador:
-            from ..utils.GerenciadorLeitoresRFID import GerenciadorLeitoresRFID
-            gerenciador = GerenciadorLeitoresRFID.get_instance()
-            current_app.config['GERENCIADOR_LEITORES'] = gerenciador
-        
-        limite = int(request.args.get('limite', 50))
-        
-        resultado = gerenciador.obter_leituras_por_etiqueta(etiqueta_hex, limite)
-        
-        if not resultado.get('success', False):
-            return jsonify({
-                'success': False,
-                'error': resultado.get('error', 'Erro ao obter histórico')
-            }), 500
-        
-        return jsonify(resultado)
-    
-    except Exception as e:
-        logger.error(f"Erro ao obter histórico da etiqueta: {str(e)}")
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+                'error': str(e),
+                'antenas': []
+            }
+        finally:
+            if cursor:
+                cursor.close()
+            if connection:
+                connection.close()
