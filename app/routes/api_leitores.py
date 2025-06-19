@@ -47,7 +47,10 @@ def listar_leituras():
         filtros = {}
         if request.args.get('etiqueta'):
             filtros['etiqueta'] = request.args.get('etiqueta').strip()
-        
+
+        if request.args.get('descricao'):              # <<< ADICIONE ISTO
+            filtros['descricao'] = request.args.get('descricao').strip()
+
         if request.args.get('antena'):
             filtros['antena'] = request.args.get('antena').strip()
         
