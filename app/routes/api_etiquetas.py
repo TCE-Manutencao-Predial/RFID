@@ -20,8 +20,6 @@ def listar_etiquetas():
         - destruida: filtro por status (0=ativas, 1=destruídas)
     """
     try:
-        #logger.info("Iniciando listagem de etiquetas")
-        
         gerenciador = current_app.config.get('GERENCIADOR_RFID')
         if not gerenciador:
             logger.error("Gerenciador RFID não encontrado no config")
@@ -51,7 +49,6 @@ def listar_etiquetas():
         if request.args.get('destruida') is not None:
             try:
                 filtros['destruida'] = int(request.args.get('destruida'))
-                #logger.info(f"Filtro destruida recebido: {filtros.get('destruida')}")
             except ValueError:
                 logger.error(f"Valor inválido para destruida: {request.args.get('destruida')}")      
                 
@@ -117,7 +114,6 @@ def listar_etiquetas():
         # Atualizar resultado com etiquetas processadas
         resultado['etiquetas'] = etiquetas_processadas
         
-        #logger.info(f"Etiquetas obtidas com sucesso. Total: {resultado.get('total', 0)}")
         return jsonify(resultado)
     
     except Exception as e:
@@ -126,6 +122,58 @@ def listar_etiquetas():
         return jsonify({
             'success': False,
             'error': f'Erro interno: {str(e)}'
+        }), 500
+
+@api_bp.route('/etiquetas', methods=['POST'])
+def criar_etiqueta():
+    """
+    Cria uma nova etiqueta RFID.
+    
+    Body JSON:
+        - EtiquetaRFID_hex: código hexadecimal da etiqueta (obrigatório)
+        - Descricao: descrição da etiqueta (opcional)
+        - Foto: imagem em base64 (opcional)
+    """
+    try:
+        gerenciador = current_app.config.get('GERENCIADOR_RFID')
+        if not gerenciador:
+            return jsonify({
+                'success': False,
+                'error': 'Gerenciador não inicializado'
+            }), 500
+        
+        # Obter dados do corpo da requisição
+        dados = request.get_json()
+        
+        if not dados:
+            return jsonify({
+                'success': False,
+                'error': 'Nenhum dado fornecido'
+            }), 400
+        
+        # Validar dados obrigatórios
+        if not dados.get('EtiquetaRFID_hex'):
+            return jsonify({
+                'success': False,
+                'error': 'Código da etiqueta (EtiquetaRFID_hex) é obrigatório'
+            }), 400
+        
+        logger.info(f"Criando nova etiqueta: {dados.get('EtiquetaRFID_hex')}")
+        
+        # Criar etiqueta
+        resultado = gerenciador.criar_etiqueta(dados)
+        
+        if resultado['success']:
+            return jsonify(resultado), 201
+        else:
+            return jsonify(resultado), 400
+    
+    except Exception as e:
+        logger.error(f"Erro ao criar etiqueta: {str(e)}")
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
         }), 500
 
 @api_bp.route('/etiquetas/<int:id_etiqueta>', methods=['GET'])
@@ -164,7 +212,15 @@ def obter_etiqueta(id_etiqueta):
 
 @api_bp.route('/etiquetas/<int:id_etiqueta>', methods=['PUT'])
 def atualizar_etiqueta(id_etiqueta):
-    """Atualiza dados de uma etiqueta."""
+    """
+    Atualiza dados de uma etiqueta.
+    
+    Body JSON:
+        - EtiquetaRFID_hex: novo código da etiqueta (opcional)
+        - Descricao: nova descrição (opcional)
+        - Destruida: status da etiqueta (opcional)
+        - Foto: nova imagem em base64 (opcional)
+    """
     try:
         gerenciador = current_app.config.get('GERENCIADOR_RFID')
         if not gerenciador:
@@ -182,6 +238,8 @@ def atualizar_etiqueta(id_etiqueta):
                 'error': 'Nenhum dado fornecido'
             }), 400
         
+        logger.info(f"Atualizando etiqueta {id_etiqueta} com dados: {list(dados.keys())}")
+        
         # Atualizar etiqueta
         resultado = gerenciador.atualizar_etiqueta(id_etiqueta, dados)
         
@@ -192,6 +250,137 @@ def atualizar_etiqueta(id_etiqueta):
     
     except Exception as e:
         logger.error(f"Erro ao atualizar etiqueta {id_etiqueta}: {str(e)}")
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@api_bp.route('/etiquetas/<int:id_etiqueta>/destruir', methods=['POST'])
+def destruir_etiqueta(id_etiqueta):
+    """
+    Marca uma etiqueta como destruída (soft delete).
+    Preenche o campo Destruida com a data/hora atual.
+    """
+    try:
+        gerenciador = current_app.config.get('GERENCIADOR_RFID')
+        if not gerenciador:
+            return jsonify({
+                'success': False,
+                'error': 'Gerenciador não inicializado'
+            }), 500
+        
+        logger.info(f"Destruindo etiqueta {id_etiqueta}")
+        
+        # Destruir etiqueta (soft delete)
+        resultado = gerenciador.destruir_etiqueta(id_etiqueta)
+        
+        if resultado['success']:
+            return jsonify(resultado)
+        else:
+            return jsonify(resultado), 400
+    
+    except Exception as e:
+        logger.error(f"Erro ao destruir etiqueta {id_etiqueta}: {str(e)}")
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@api_bp.route('/etiquetas/<int:id_etiqueta>/restaurar', methods=['POST'])
+def restaurar_etiqueta(id_etiqueta):
+    """
+    Restaura uma etiqueta destruída.
+    Define o campo Destruida como NULL.
+    """
+    try:
+        gerenciador = current_app.config.get('GERENCIADOR_RFID')
+        if not gerenciador:
+            return jsonify({
+                'success': False,
+                'error': 'Gerenciador não inicializado'
+            }), 500
+        
+        logger.info(f"Restaurando etiqueta {id_etiqueta}")
+        
+        # Restaurar etiqueta
+        resultado = gerenciador.restaurar_etiqueta(id_etiqueta)
+        
+        if resultado['success']:
+            return jsonify(resultado)
+        else:
+            return jsonify(resultado), 400
+    
+    except Exception as e:
+        logger.error(f"Erro ao restaurar etiqueta {id_etiqueta}: {str(e)}")
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@api_bp.route('/etiquetas/<int:id_etiqueta>/foto', methods=['POST'])
+def upload_foto_etiqueta(id_etiqueta):
+    """
+    Upload de foto para uma etiqueta específica.
+    
+    Body pode ser:
+        - JSON com campo 'foto' contendo base64
+        - Multipart form-data com arquivo de imagem
+    """
+    try:
+        gerenciador = current_app.config.get('GERENCIADOR_RFID')
+        if not gerenciador:
+            return jsonify({
+                'success': False,
+                'error': 'Gerenciador não inicializado'
+            }), 500
+        
+        foto_data = None
+        
+        # Verificar se é JSON com base64
+        if request.is_json:
+            dados = request.get_json()
+            foto_data = dados.get('foto') or dados.get('Foto')
+            
+            if not foto_data:
+                return jsonify({
+                    'success': False,
+                    'error': 'Campo "foto" não encontrado no JSON'
+                }), 400
+        
+        # Verificar se é upload de arquivo
+        elif 'foto' in request.files:
+            file = request.files['foto']
+            if file.filename == '':
+                return jsonify({
+                    'success': False,
+                    'error': 'Nenhum arquivo selecionado'
+                }), 400
+            
+            # Ler arquivo e converter para base64
+            import base64
+            foto_data = base64.b64encode(file.read()).decode('utf-8')
+        
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'Nenhuma foto fornecida'
+            }), 400
+        
+        logger.info(f"Fazendo upload de foto para etiqueta {id_etiqueta}")
+        
+        # Atualizar apenas a foto
+        resultado = gerenciador.atualizar_etiqueta(id_etiqueta, {'Foto': foto_data})
+        
+        if resultado['success']:
+            return jsonify(resultado)
+        else:
+            return jsonify(resultado), 400
+    
+    except Exception as e:
+        logger.error(f"Erro ao fazer upload de foto para etiqueta {id_etiqueta}: {str(e)}")
         logger.error(f"Traceback: {traceback.format_exc()}")
         return jsonify({
             'success': False,
