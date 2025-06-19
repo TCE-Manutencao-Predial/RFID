@@ -995,3 +995,139 @@
     transform: rotate(360deg);
   }
 }
+/* ADICIONAR AO ARQUIVO controle_etiquetas.css */
+
+/* Botões de navegação do header */
+.rfid-nav-buttons {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.rfid-nav-btn {
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: white;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  backdrop-filter: blur(10px);
+  position: relative;
+  overflow: hidden;
+}
+
+.rfid-nav-btn:hover {
+  background: rgba(255, 255, 255, 0.25);
+  border-color: rgba(255, 255, 255, 0.5);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.rfid-nav-btn:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.rfid-nav-btn i {
+  font-size: 1rem;
+  opacity: 0.9;
+}
+
+.rfid-nav-btn span {
+  font-weight: 500;
+  letter-spacing: 0.3px;
+}
+
+/* Efeito de ripple ao clicar */
+.rfid-nav-btn::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.4);
+  transform: translate(-50%, -50%);
+  transition: width 0.4s, height 0.4s;
+}
+
+.rfid-nav-btn:active::before {
+  width: 200px;
+  height: 200px;
+}
+
+/* Responsividade para botões do header */
+@media (max-width: 768px) {
+  .rfid-custom-nav {
+    flex-direction: column;
+    gap: 15px;
+    padding: 15px !important;
+  }
+  
+  .rfid-nav-buttons {
+    width: 100%;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+  
+  .rfid-nav-btn {
+    font-size: 0.85rem;
+    padding: 6px 12px;
+  }
+  
+  .rfid-nav-btn span {
+    display: none; /* Esconder texto em telas pequenas */
+  }
+  
+  .rfid-nav-btn i {
+    font-size: 1.1rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .rfid-nav-buttons {
+    gap: 8px;
+  }
+  
+  .rfid-nav-btn {
+    padding: 8px;
+    border-radius: 6px;
+  }
+}
+
+/* Adicionar tooltip para quando o texto estiver escondido */
+@media (max-width: 768px) {
+  .rfid-nav-btn {
+    position: relative;
+  }
+  
+  .rfid-nav-btn::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--rfid-dark);
+    color: white;
+    padding: 6px 10px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s, transform 0.2s;
+    margin-top: 5px;
+  }
+  
+  .rfid-nav-btn:hover::after {
+    opacity: 1;
+    transform: translateX(-50%) translateY(2px);
+  }
+}
