@@ -197,15 +197,26 @@
 
             <div class="form-group">
               <label class="form-label">
+                Buscar Ferramenta <span class="required">*</span>
+              </label>
+              <div class="search-container">
+                <input type="text" id="buscaFerramenta" class="form-input" placeholder="Digite o código RFID ou nome da ferramenta..." />
+                <div id="sugestoesFerramenta" class="suggestions-dropdown"></div>
+              </div>
+              <div class="form-hint">Pesquise por código ou descrição da ferramenta</div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">
                 Código RFID da Ferramenta <span class="required">*</span>
               </label>
               <div class="input-with-btn">
-                <input type="text" id="emprestimoEtiqueta" class="form-input" placeholder="Ex: AAA0AAAA0000000000002808" required maxlength="24" />
+                <input type="text" id="emprestimoEtiqueta" class="form-input" placeholder="Ex: AAA0AAAA0000000000002808" required maxlength="24" readonly />
                 <button type="button" class="btn-check-availability" onclick="verificarDisponibilidade()">
                   <i class="fas fa-search"></i> Verificar
                 </button>
               </div>
-              <div class="form-hint">Digite o código completo ou apenas os números finais</div>
+              <div class="form-hint">Código selecionado automaticamente pela busca</div>
               <div id="disponibilidadeInfo" class="availability-info"></div>
             </div>
 

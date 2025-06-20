@@ -74,6 +74,24 @@ function inicializarEventos() {
       }
     });
   }
+
+  // Busca de ferramentas
+  const campoBusca = document.getElementById("buscaFerramenta");
+  if (campoBusca) {
+    campoBusca.addEventListener("input", debounce(buscarFerramentas, 300));
+    campoBusca.addEventListener("focus", function() {
+      if (this.value.trim().length >= 2) {
+        buscarFerramentas();
+      }
+    });
+    
+    // Fechar sugestões ao clicar fora
+    document.addEventListener("click", function(e) {
+      if (!e.target.closest(".search-container")) {
+        document.getElementById("sugestoesFerramenta").classList.remove("show");
+      }
+    });
+  }
 }
 
 function debounce(func, wait) {
@@ -295,10 +313,32 @@ function calcularTempoDecorrido(dataEmprestimo) {
   const agora = new Date();
   let dataEmp;
 
+  // Log para debug
+  console.log("Data original:", dataEmprestimo);
+
   if (typeof dataEmprestimo === "string") {
-    dataEmp = new Date(dataEmprestimo);
+    // Remover " às " se existir e tratar diferentes formatos
+    const dataLimpa = dataEmprestimo.replace(" às ", " ");
+    
+    // Tentar diferentes formatos de data
+    // Formato brasileiro: DD/MM/YYYY HH:MM
+    if (dataLimpa.includes("/")) {
+      const [dataParte, horaParte] = dataLimpa.split(" ");
+      const [dia, mes, ano] = dataParte.split("/");
+      const dataFormatada = `${ano}-${mes}-${dia}${horaParte ? ' ' + horaParte : ''}`;
+      dataEmp = new Date(dataFormatada);
+    } else {
+      // Formato ISO ou americano
+      dataEmp = new Date(dataLimpa);
+    }
   } else {
     dataEmp = dataEmprestimo;
+  }
+
+  // Verificar se a data é válida
+  if (isNaN(dataEmp.getTime())) {
+    console.error("Data inválida:", dataEmprestimo);
+    return { texto: "Tempo indisponível", alerta: false };
   }
 
   const diff = agora - dataEmp;
@@ -425,6 +465,9 @@ function abrirModalNovoEmprestimo() {
   document.getElementById("modalTitulo").textContent = "Novo Empréstimo";
   document.getElementById("formEmprestimo").reset();
   document.getElementById("disponibilidadeInfo").style.display = "none";
+  document.getElementById("emprestimoEtiqueta").readOnly = true; // Campo somente leitura
+  document.getElementById("buscaFerramenta").value = ""; // Limpar busca
+  document.getElementById("sugestoesFerramenta").classList.remove("show");
   etiquetaVerificada = false;
   abrirModal("modalEmprestimo");
 }
@@ -545,8 +588,14 @@ function abrirModalDevolucao(id, colaborador, etiqueta, descricao, dataEmprestim
   document.getElementById("devolucaoFerramenta").textContent = `${etiqueta} - ${descricao || "Sem descrição"}`;
   document.getElementById("devolucaoDataEmprestimo").textContent = dataEmprestimo;
 
-  // Calcular tempo decorrido
-  const tempo = calcularTempoDecorrido(dataEmprestimo.split(" às ")[0]);
+  // Calcular tempo decorrido - extrair apenas a data se vier com " às "
+  let dataParaCalculo = dataEmprestimo;
+  if (dataEmprestimo.includes(" às ")) {
+    // Se vier no formato "DD/MM/YYYY às HH:MM", usar a string completa
+    dataParaCalculo = dataEmprestimo;
+  }
+  
+  const tempo = calcularTempoDecorrido(dataParaCalculo);
   const spanTempo = document.getElementById("devolucaoTempo");
   spanTempo.textContent = tempo.texto;
   if (tempo.alerta) {
@@ -726,6 +775,77 @@ function navegarPara(secao) {
     default:
       showToast("Seção não encontrada", "error");
   }
+}
+
+// Busca de ferramentas para empréstimo
+async function buscarFerramentas() {
+  const termo = document.getElementById("buscaFerramenta").value.trim();
+  const sugestoesDiv = document.getElementById("sugestoesFerramenta");
+  
+  if (termo.length < 2) {
+    sugestoesDiv.classList.remove("show");
+    return;
+  }
+  
+  try {
+    // Buscar tanto por código quanto por descrição
+    const params = new URLSearchParams({
+      limite: 10,
+      destruida: 0  // Apenas ferramentas ativas
+    });
+    
+    // Se o termo parece um código (tem números), buscar por etiqueta
+    if (/\d/.test(termo)) {
+      params.append('etiqueta', termo);
+    } else {
+      // Senão, buscar por descrição
+      params.append('descricao', termo);
+    }
+    
+    const response = await fetch(`/RFID/api/etiquetas?${params}`);
+    const data = await response.json();
+    
+    if (data.success && data.etiquetas.length > 0) {
+      sugestoesDiv.innerHTML = "";
+      
+      data.etiquetas.forEach(etiqueta => {
+        const item = document.createElement("div");
+        item.className = "suggestion-item";
+        item.innerHTML = `
+          <div class="etiqueta-codigo">${etiqueta.EtiquetaRFID_hex}</div>
+          <div class="etiqueta-descricao">${etiqueta.Descricao || "Sem descrição"}</div>
+        `;
+        
+        item.addEventListener("click", function() {
+          selecionarFerramenta(etiqueta.EtiquetaRFID_hex, etiqueta.Descricao);
+        });
+        
+        sugestoesDiv.appendChild(item);
+      });
+      
+      sugestoesDiv.classList.add("show");
+    } else {
+      sugestoesDiv.innerHTML = '<div class="no-results">Nenhuma ferramenta encontrada</div>';
+      sugestoesDiv.classList.add("show");
+    }
+  } catch (error) {
+    console.error("Erro ao buscar ferramentas:", error);
+    sugestoesDiv.classList.remove("show");
+  }
+}
+
+function selecionarFerramenta(codigo, descricao) {
+  // Preencher o campo de código
+  document.getElementById("emprestimoEtiqueta").value = codigo;
+  
+  // Atualizar o campo de busca
+  document.getElementById("buscaFerramenta").value = `${codigo} - ${descricao || "Sem descrição"}`;
+  
+  // Esconder sugestões
+  document.getElementById("sugestoesFerramenta").classList.remove("show");
+  
+  // Verificar disponibilidade automaticamente
+  verificarDisponibilidade();
 }
 
 // Adicionar indicador visual para página atual
