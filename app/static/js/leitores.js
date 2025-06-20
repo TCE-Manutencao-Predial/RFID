@@ -301,10 +301,8 @@ async function carregarAntenas() {
     if (data.success) {
       antenasDisponiveis = data.antenas;
       const select = document.getElementById("filtroAntena");
-      
-      // Limpar e adicionar opção padrão
       select.innerHTML = '<option value="">Todas as Antenas</option>';
-      
+
       // Agrupar antenas por código do leitor
       const antenasAgrupadas = {};
       data.antenas.forEach(antena => {
@@ -313,20 +311,16 @@ async function carregarAntenas() {
         }
         antenasAgrupadas[antena.codigo_leitor].push(antena);
       });
-      
-      // Adicionar antenas agrupadas
+
       Object.keys(antenasAgrupadas).sort().forEach(codigoLeitor => {
-        // Criar optgroup para cada leitor
         const optgroup = document.createElement('optgroup');
         optgroup.label = `Leitor ${codigoLeitor}`;
-        
         antenasAgrupadas[codigoLeitor].forEach(antena => {
           const option = document.createElement('option');
-          option.value = antena.antena_completa; // Usar formato completo
-          option.textContent = `${antena.antena_completa} (${antena.total_leituras.toLocaleString('pt-BR')} leituras)`;
+          option.value = antena.antena;
+          option.textContent = `[${codigoLeitor}] A${antena.antena}`;
           optgroup.appendChild(option);
         });
-        
         select.appendChild(optgroup);
       });
       
