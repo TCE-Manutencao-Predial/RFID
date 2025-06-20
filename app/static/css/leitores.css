@@ -1,8 +1,5 @@
 /* leitores.css - Estilos específicos para página de leituras RFID */
 
-/* Importar estilos base que são compartilhados */
-/* Os estilos principais já estão em etiquetas.css, mas vamos adicionar específicos para leitores */
-
 /* Badge de status de etiqueta */
 .rfid-badge-cadastrada {
   background-color: var(--rfid-info);

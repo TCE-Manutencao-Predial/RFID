@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Sistema de Empréstimos RFID</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <!-- CSS Base -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/base.css') }}" />
+
+    <!-- Font Awesome para ícones -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+
+    <!-- CSS Específico -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/emprestimos.css') }}" />
+  </head>
+  <body class="rfid-custom-layout">
+    <!-- Container de Toast -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <!-- Header Customizado -->
+    <div class="rfid-custom-header">
+      <nav class="rfid-custom-nav">
+        <h1 class="rfid-system-title">
+          <i class="fas fa-hand-holding"></i>
+          Empréstimos RFID
+        </h1>
+
+        <div class="rfid-nav-buttons">
+          <button class="rfid-nav-btn" onclick="navegarPara('etiquetas')">
+            <i class="fas fa-tags"></i>
+            <span>Etiquetas</span>
+          </button>
+          <button class="rfid-nav-btn" onclick="navegarPara('inventarios')">
+            <i class="fas fa-boxes"></i>
+            <span>Inventários</span>
+          </button>
+          <button class="rfid-nav-btn" onclick="navegarPara('leitores')">
+            <i class="fas fa-satellite-dish"></i>
+            <span>Leitores</span>
+          </button>
+          <button class="rfid-nav-btn active" onclick="navegarPara('emprestimos')">
+            <i class="fas fa-hand-holding"></i>
+            <span>Empréstimos</span>
+          </button>
+        </div>
+      </nav>
+    </div>
+
+    <main>
+      <!-- Estatísticas -->
+      <div class="rfid-stats">
+        <div class="rfid-stat-card">
+          <i class="fas fa-clipboard-list rfid-stat-icon" style="color: var(--rfid-primary)"></i>
+          <h2 class="rfid-stat-value" id="totalEmprestimos">0</h2>
+          <p class="rfid-stat-label">Total de Empréstimos</p>
+        </div>
+        <div class="rfid-stat-card">
+          <i class="fas fa-hand-holding rfid-stat-icon" style="color: var(--rfid-warning)"></i>
+          <h2 class="rfid-stat-value" id="emprestimosAtivos">0</h2>
+          <p class="rfid-stat-label">Em Empréstimo</p>
+        </div>
+        <div class="rfid-stat-card">
+          <i class="fas fa-check-double rfid-stat-icon" style="color: var(--rfid-success)"></i>
+          <h2 class="rfid-stat-value" id="emprestimosDevolvidos">0</h2>
+          <p class="rfid-stat-label">Devolvidos</p>
+        </div>
+        <div class="rfid-stat-card">
+          <i class="fas fa-percentage rfid-stat-icon" style="color: var(--rfid-info)"></i>
+          <h2 class="rfid-stat-value" id="percentualAtivos">0%</h2>
+          <p class="rfid-stat-label">Taxa de Ativos</p>
+        </div>
+      </div>
+
+      <!-- Controles e Filtros -->
+      <div class="rfid-controls">
+        <div class="rfid-controls-header">
+          <h3 class="rfid-controls-title"><i class="fas fa-filter"></i> Filtros e Controles</h3>
+          <div class="rfid-btn-group">
+            <button class="rfid-btn rfid-btn-success" onclick="abrirModalNovoEmprestimo()">
+              <i class="fas fa-plus"></i> Novo Empréstimo
+            </button>
+            <button class="rfid-btn rfid-btn-warning" onclick="abrirModalPendentes()">
+              <i class="fas fa-clock"></i> Ver Pendentes
+            </button>
+            <button class="rfid-btn rfid-btn-primary" onclick="atualizarDados()">
+              <i class="fas fa-sync-alt"></i> Atualizar
+            </button>
+            <button class="rfid-btn rfid-btn-primary" onclick="exportarDados()">
+              <i class="fas fa-file-export"></i> Exportar
+            </button>
+          </div>
+        </div>
+
+        <div class="rfid-filters">
+          <div class="rfid-filter-group">
+            <label class="rfid-filter-label">
+              <i class="fas fa-user"></i> ID Colaborador
+            </label>
+            <input type="number" id="filtroColaborador" class="rfid-filter-input" placeholder="Digite o ID..." autocomplete="off" />
+          </div>
+
+          <div class="rfid-filter-group">
+            <label class="rfid-filter-label">
+              <i class="fas fa-barcode"></i> Etiqueta RFID
+            </label>
+            <input type="text" id="filtroEtiqueta" class="rfid-filter-input" placeholder="Digite o código..." autocomplete="off" />
+          </div>
+
+          <div class="rfid-filter-group">
+            <label class="rfid-filter-label">
+              <i class="fas fa-check-square"></i> Status
+            </label>
+            <select id="filtroStatus" class="rfid-filter-select">
+              <option value="">Todos</option>
+              <option value="ativo">Em Empréstimo</option>
+              <option value="devolvido">Devolvidos</option>
+            </select>
+          </div>
+
+          <div class="rfid-filter-group">
+            <label class="rfid-filter-label">
+              <i class="fas fa-calendar"></i> Período
+            </label>
+            <div class="date-range">
+              <input type="date" id="filtroDataInicio" class="rfid-filter-input" />
+              <span class="date-separator">até</span>
+              <input type="date" id="filtroDataFim" class="rfid-filter-input" />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tabela -->
+      <div class="rfid-table-container">
+        <div id="loadingState" class="rfid-loading" style="display: none">
+          <i class="fas fa-spinner"></i>
+          <p>Carregando empréstimos...</p>
+        </div>
+
+        <div id="emptyState" class="rfid-empty" style="display: none">
+          <i class="fas fa-inbox"></i>
+          <h3>Nenhum empréstimo encontrado</h3>
+          <p>Tente ajustar os filtros ou registre um novo empréstimo</p>
+        </div>
+
+        <table class="rfid-table" id="tabelaEmprestimos" style="display: none">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Colaborador</th>
+              <th>Ferramenta</th>
+              <th>Data Empréstimo</th>
+              <th>Data Devolução</th>
+              <th>Status</th>
+              <th>Ações</th>
+            </tr>
+          </thead>
+          <tbody id="tabelaCorpo">
+            <!-- Registros serão inseridos via JavaScript -->
+          </tbody>
+        </table>
+
+        <div class="rfid-pagination" id="paginacao" style="display: none">
+          <div class="rfid-pagination-info">
+            Mostrando <span id="registroInicio">0</span> a <span id="registroFim">0</span> de <span id="registroTotal">0</span> registros
+          </div>
+          <div class="rfid-pagination-controls" id="paginacaoControles">
+            <!-- Controles de paginação serão inseridos via JavaScript -->
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- Modal de Novo Empréstimo -->
+    <div class="modal-overlay" id="modalEmprestimo">
+      <div class="modal">
+        <div class="modal-header">
+          <h3 class="modal-title">
+            <i class="fas fa-hand-holding"></i>
+            <span id="modalTitulo">Novo Empréstimo</span>
+          </h3>
+          <button class="modal-close" onclick="fecharModal('modalEmprestimo')">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+        <form id="formEmprestimo" onsubmit="salvarEmprestimo(event)">
+          <div class="modal-body">
+            <div class="form-group">
+              <label class="form-label">
+                ID do Colaborador <span class="required">*</span>
+              </label>
+              <input type="number" id="emprestimoColaborador" class="form-input" placeholder="Digite o ID do colaborador" required />
+              <div class="form-hint">Identificação numérica do colaborador</div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">
+                Código RFID da Ferramenta <span class="required">*</span>
+              </label>
+              <div class="input-with-btn">
+                <input type="text" id="emprestimoEtiqueta" class="form-input" placeholder="Ex: AAA0AAAA0000000000002808" required maxlength="24" />
+                <button type="button" class="btn-check-availability" onclick="verificarDisponibilidade()">
+                  <i class="fas fa-search"></i> Verificar
+                </button>
+              </div>
+              <div class="form-hint">Digite o código completo ou apenas os números finais</div>
+              <div id="disponibilidadeInfo" class="availability-info"></div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">
+                Observações
+              </label>
+              <textarea id="emprestimoObservacao" class="form-textarea" placeholder="Observações sobre o empréstimo (opcional)"></textarea>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="rfid-btn btn-cancel" onclick="fecharModal('modalEmprestimo')">Cancelar</button>
+            <button type="submit" class="rfid-btn rfid-btn-primary" id="btnSalvarEmprestimo">
+              <i class="fas fa-save"></i> Registrar Empréstimo
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Modal de Devolução -->
+    <div class="modal-overlay" id="modalDevolucao">
+      <div class="modal">
+        <div class="modal-header">
+          <h3 class="modal-title">
+            <i class="fas fa-undo"></i>
+            Registrar Devolução
+          </h3>
+          <button class="modal-close" onclick="fecharModal('modalDevolucao')">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+        <form id="formDevolucao" onsubmit="confirmarDevolucao(event)">
+          <div class="modal-body">
+            <input type="hidden" id="devolucaoId" value="" />
+            
+            <div class="info-devolucao">
+              <p><strong>Colaborador:</strong> <span id="devolucaoColaborador"></span></p>
+              <p><strong>Ferramenta:</strong> <span id="devolucaoFerramenta"></span></p>
+              <p><strong>Data do Empréstimo:</strong> <span id="devolucaoDataEmprestimo"></span></p>
+              <p><strong>Tempo decorrido:</strong> <span id="devolucaoTempo"></span></p>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">
+                Observações sobre a devolução
+              </label>
+              <textarea id="devolucaoObservacao" class="form-textarea" placeholder="Estado da ferramenta, observações..."></textarea>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="rfid-btn btn-cancel" onclick="fecharModal('modalDevolucao')">Cancelar</button>
+            <button type="submit" class="rfid-btn rfid-btn-success" id="btnConfirmarDevolucao">
+              <i class="fas fa-check"></i> Confirmar Devolução
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Modal de Empréstimos Pendentes -->
+    <div class="modal-overlay" id="modalPendentes">
+      <div class="modal modal-large">
+        <div class="modal-header">
+          <h3 class="modal-title">
+            <i class="fas fa-clock"></i>
+            Empréstimos Pendentes
+          </h3>
+          <button class="modal-close" onclick="fecharModal('modalPendentes')">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+        <div class="modal-body">
+          <div id="loadingPendentes" class="rfid-loading">
+            <i class="fas fa-spinner"></i>
+            <p>Carregando empréstimos pendentes...</p>
+          </div>
+          
+          <div id="listaPendentes" class="pendentes-list"></div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="rfid-btn rfid-btn-primary" onclick="fecharModal('modalPendentes')">
+            <i class="fas fa-times"></i> Fechar
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- JavaScript -->
+    <script src="{{ url_for('static', filename='js/emprestimos.js') }}"></script>
+  </body>
+</html>
