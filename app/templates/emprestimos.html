@@ -209,8 +209,12 @@
 
             <div class="form-group">
               <label class="form-label">
-                Código RFID Selecionado
+                Ferramenta selecionada:
               </label>
+
+              <!-- guarda o código para o JS ler no salvarEmprestimo -->
+              <input type="hidden" id="emprestimoEtiqueta" name="EtiquetaRFID_hex" />
+
               <!-- substitui o input por uma div informativa -->
               <div id="codigoSelecionado" class="selected-info">
                 <!-- será preenchido via JS -->
