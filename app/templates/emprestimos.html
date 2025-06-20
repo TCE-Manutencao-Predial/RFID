@@ -204,19 +204,14 @@
                 <div id="sugestoesFerramenta" class="suggestions-dropdown"></div>
               </div>
               <div class="form-hint">Pesquise por código ou descrição da ferramenta</div>
+              <div id="ferramentaSelecionada" class="ferramenta-selecionada"></div>
             </div>
 
             <div class="form-group">
               <label class="form-label">
-                Código RFID da Ferramenta <span class="required">*</span>
+                Código RFID Selecionado
               </label>
-              <div class="input-with-btn">
-                <input type="text" id="emprestimoEtiqueta" class="form-input" placeholder="Ex: AAA0AAAA0000000000002808" required maxlength="24" readonly />
-                <button type="button" class="btn-check-availability" onclick="verificarDisponibilidade()">
-                  <i class="fas fa-search"></i> Verificar
-                </button>
-              </div>
-              <div class="form-hint">Código selecionado automaticamente pela busca</div>
+              <input type="text" id="emprestimoEtiqueta" class="form-input codigo-display" placeholder="Selecione uma ferramenta acima" required maxlength="24" readonly />
               <div id="disponibilidadeInfo" class="availability-info"></div>
             </div>
 

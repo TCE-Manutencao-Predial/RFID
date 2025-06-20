@@ -465,28 +465,22 @@ function abrirModalNovoEmprestimo() {
   document.getElementById("modalTitulo").textContent = "Novo Empréstimo";
   document.getElementById("formEmprestimo").reset();
   document.getElementById("disponibilidadeInfo").style.display = "none";
-  document.getElementById("emprestimoEtiqueta").readOnly = true; // Campo somente leitura
-  document.getElementById("buscaFerramenta").value = ""; // Limpar busca
+  document.getElementById("disponibilidadeInfo").className = "availability-info";
+  document.getElementById("emprestimoEtiqueta").value = "";
+  document.getElementById("buscaFerramenta").value = "";
+  document.getElementById("ferramentaSelecionada").classList.remove("show");
   document.getElementById("sugestoesFerramenta").classList.remove("show");
   etiquetaVerificada = false;
   abrirModal("modalEmprestimo");
 }
 
 async function verificarDisponibilidade() {
-  let etiqueta = document.getElementById("emprestimoEtiqueta").value.trim();
+  const etiqueta = document.getElementById("emprestimoEtiqueta").value.trim();
 
   if (!etiqueta) {
-    showToast("Digite o código da etiqueta", "warning");
+    showToast("Selecione uma ferramenta primeiro", "warning");
     return;
   }
-
-  // Padronizar código
-  etiqueta = padronizarCodigoRFID(etiqueta);
-  document.getElementById("emprestimoEtiqueta").value = etiqueta;
-
-  const btnVerificar = document.querySelector(".btn-check-availability");
-  btnVerificar.disabled = true;
-  btnVerificar.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Verificando...';
 
   try {
     const response = await fetch(`/RFID/api/emprestimos/ferramenta/${etiqueta}/disponibilidade`);
@@ -496,27 +490,21 @@ async function verificarDisponibilidade() {
 
     if (data.success && data.disponivel) {
       infoDiv.className = "availability-info disponivel";
-      infoDiv.innerHTML = `
-        <i class="fas fa-check-circle"></i>
-        <strong>Disponível!</strong> ${data.descricao || "Ferramenta sem descrição"}
-      `;
+      infoDiv.innerHTML = `<i class="fas fa-check-circle"></i> Disponível para empréstimo`;
       etiquetaVerificada = true;
     } else if (data.success && !data.disponivel) {
       infoDiv.className = "availability-info indisponivel";
-      let mensagem = `<i class="fas fa-times-circle"></i> <strong>${data.motivo}</strong>`;
+      let mensagem = `<i class="fas fa-times-circle"></i> ${data.motivo}`;
 
       if (data.emprestimo_ativo) {
-        mensagem += `<br>Emprestada para colaborador ${data.emprestimo_ativo.id_colaborador} desde ${data.emprestimo_ativo.data_emprestimo}`;
+        mensagem += ` (Colaborador: ${data.emprestimo_ativo.id_colaborador})`;
       }
 
       infoDiv.innerHTML = mensagem;
       etiquetaVerificada = false;
     } else {
       infoDiv.className = "availability-info aviso";
-      infoDiv.innerHTML = `
-        <i class="fas fa-exclamation-triangle"></i>
-        ${data.error || "Erro ao verificar disponibilidade"}
-      `;
+      infoDiv.innerHTML = `<i class="fas fa-exclamation-triangle"></i> ${data.error || "Erro ao verificar"}`;
       etiquetaVerificada = false;
     }
 
@@ -524,9 +512,6 @@ async function verificarDisponibilidade() {
   } catch (error) {
     showToast("Erro ao verificar disponibilidade", "error");
     console.error(error);
-  } finally {
-    btnVerificar.disabled = false;
-    btnVerificar.innerHTML = '<i class="fas fa-search"></i> Verificar';
   }
 }
 
@@ -838,8 +823,13 @@ function selecionarFerramenta(codigo, descricao) {
   // Preencher o campo de código
   document.getElementById("emprestimoEtiqueta").value = codigo;
   
-  // Atualizar o campo de busca
-  document.getElementById("buscaFerramenta").value = `${codigo} - ${descricao || "Sem descrição"}`;
+  // Limpar o campo de busca para permitir nova busca
+  document.getElementById("buscaFerramenta").value = "";
+  
+  // Mostrar ferramenta selecionada
+  const ferramentaDiv = document.getElementById("ferramentaSelecionada");
+  ferramentaDiv.innerHTML = `<i class="fas fa-check"></i> <strong>Selecionada:</strong> ${descricao || "Sem descrição"}`;
+  ferramentaDiv.classList.add("show");
   
   // Esconder sugestões
   document.getElementById("sugestoesFerramenta").classList.remove("show");
