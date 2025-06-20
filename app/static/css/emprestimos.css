@@ -1,5 +1,3 @@
-
-
 /* ========================================================================
    ESTILOS ESPECÍFICOS PARA EMPRÉSTIMOS
    ======================================================================== */
@@ -448,4 +446,25 @@
 .historico-btn:hover {
   background: #138496;
   transform: translateY(-1px);
+}
+
+/* Estilos gerais para modais */
+.modal {
+  display: flex;
+  flex-direction: column;
+  max-height: 90vh;        /* limita a altura total */
+}
+
+.modal-body {
+  overflow-y: auto;        /* rolagem interna */
+  flex: 1 1 auto;          /* ocupa todo o espaço disponível */
+}
+
+.modal-footer {
+  position: sticky;        /* fixa o footer na base */
+  bottom: 0;
+  background: var(--rfid-light);
+  z-index: 10;
+  /* opcional: padding extra para espaçamento */
+  padding: 15px 20px;
 }
