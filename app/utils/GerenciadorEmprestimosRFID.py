@@ -131,7 +131,7 @@ class GerenciadorEmprestimosRFID:
             # Verificar se a ferramenta já está emprestada
             check_emprestimo = """
                 SELECT id, id_colaborador 
-                FROM emprestimoRFID 
+                FROM emprestimosRFID 
                 WHERE EtiquetaRFID_hex = %s AND dataDevolucao IS NULL
             """
             cursor.execute(check_emprestimo, (dados['EtiquetaRFID_hex'],))
@@ -149,7 +149,7 @@ class GerenciadorEmprestimosRFID:
             
             # Inserir empréstimo
             insert_query = """
-                INSERT INTO emprestimoRFID 
+                INSERT INTO emprestimosRFID 
                 (id_colaborador, EtiquetaRFID_hex, dataEmprestimo, Observacao)
                 VALUES (%s, %s, %s, %s)
             """
@@ -206,7 +206,7 @@ class GerenciadorEmprestimosRFID:
             # Verificar se o empréstimo existe e está ativo
             check_query = """
                 SELECT id, dataDevolucao 
-                FROM emprestimoRFID 
+                FROM emprestimosRFID 
                 WHERE id = %s
             """
             cursor.execute(check_query, (id_emprestimo,))
@@ -226,7 +226,7 @@ class GerenciadorEmprestimosRFID:
             
             # Atualizar com data de devolução
             update_query = """
-                UPDATE emprestimoRFID 
+                UPDATE emprestimosRFID 
                 SET dataDevolucao = %s, Observacao = CONCAT(Observacao, %s)
                 WHERE id = %s
             """
@@ -312,7 +312,7 @@ class GerenciadorEmprestimosRFID:
                         WHEN e.dataDevolucao IS NULL THEN 'ativo'
                         ELSE 'devolvido'
                     END as status
-                FROM emprestimoRFID e
+                FROM emprestimosRFID e
                 LEFT JOIN etiquetasRFID et ON e.EtiquetaRFID_hex = et.EtiquetaRFID_hex
                 WHERE 1=1
             """
@@ -455,11 +455,11 @@ class GerenciadorEmprestimosRFID:
             cursor = connection.cursor(dictionary=True)
             
             # Total de empréstimos
-            cursor.execute("SELECT COUNT(*) as total FROM emprestimoRFID")
+            cursor.execute("SELECT COUNT(*) as total FROM emprestimosRFID")
             total_emprestimos = cursor.fetchone()['total']
             
             # Empréstimos ativos
-            cursor.execute("SELECT COUNT(*) as ativos FROM emprestimoRFID WHERE dataDevolucao IS NULL")
+            cursor.execute("SELECT COUNT(*) as ativos FROM emprestimosRFID WHERE dataDevolucao IS NULL")
             emprestimos_ativos = cursor.fetchone()['ativos']
             
             # Ferramentas mais emprestadas
@@ -468,7 +468,7 @@ class GerenciadorEmprestimosRFID:
                     e.EtiquetaRFID_hex,
                     et.Descricao,
                     COUNT(*) as total_emprestimos
-                FROM emprestimoRFID e
+                FROM emprestimosRFID e
                 LEFT JOIN etiquetasRFID et ON e.EtiquetaRFID_hex = et.EtiquetaRFID_hex
                 GROUP BY e.EtiquetaRFID_hex
                 ORDER BY total_emprestimos DESC
@@ -482,7 +482,7 @@ class GerenciadorEmprestimosRFID:
                 SELECT 
                     id_colaborador,
                     COUNT(*) as emprestimos_ativos
-                FROM emprestimoRFID
+                FROM emprestimosRFID
                 WHERE dataDevolucao IS NULL
                 GROUP BY id_colaborador
                 ORDER BY emprestimos_ativos DESC
@@ -567,7 +567,7 @@ class GerenciadorEmprestimosRFID:
             # Verificar se está emprestada
             query_emprestimo = """
                 SELECT id, id_colaborador, dataEmprestimo
-                FROM emprestimoRFID
+                FROM emprestimosRFID
                 WHERE EtiquetaRFID_hex = %s AND dataDevolucao IS NULL
             """
             cursor.execute(query_emprestimo, (etiqueta_rfid_hex,))
