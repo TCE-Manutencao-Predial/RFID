@@ -357,7 +357,7 @@ class GerenciadorLeitoresRFID:
                     SELECT 
                         COUNT(DISTINCT l.EtiquetaRFID_hex) as total_etiquetas_unicas,
                         COUNT(*) as total_leituras,
-                        COUNT(DISTINCT l.Antena) as total_antenas,
+                        COUNT(DISTINCT CONCAT(l.CodigoLeitor, ':', l.Antena)) as total_antenas,
                         COUNT(DISTINCT DATE(l.Horario)) as dias_com_leitura,
                         MIN(l.Horario) as primeira_leitura,
                         MAX(l.Horario) as ultima_leitura,
