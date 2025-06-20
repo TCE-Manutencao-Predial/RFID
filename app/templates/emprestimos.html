@@ -211,7 +211,10 @@
               <label class="form-label">
                 Código RFID Selecionado
               </label>
-              <input type="text" id="emprestimoEtiqueta" class="form-input codigo-display" placeholder="Selecione uma ferramenta acima" required maxlength="24" readonly />
+              <!-- substitui o input por uma div informativa -->
+              <div id="codigoSelecionado" class="selected-info">
+                <!-- será preenchido via JS -->
+              </div>
               <div id="disponibilidadeInfo" class="availability-info"></div>
             </div>
 

@@ -289,6 +289,26 @@
   border-bottom: 1px dotted #6c757d;
 }
 
+/* nova estilização para o código+descrição */
+.selected-info {
+  display: block;
+  background: #fff8e1;              /* amarelo suave */
+  border: 1px solid #ffe8a1;         /* contorno leve */
+  border-radius: 6px;
+  padding: 10px;
+  font-family: monospace;
+  color: #495057;
+  margin-top: 6px;
+  min-height: 1.5em;
+}
+/* opcional: só mostra quando tiver conteúdo */
+.selected-info:not(.show) {
+  display: none;
+}
+.selected-info.show {
+  display: block;
+}
+
 /* Responsividade */
 @media (max-width: 768px) {
   .date-range {

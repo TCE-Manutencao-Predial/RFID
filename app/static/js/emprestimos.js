@@ -462,14 +462,11 @@ function fecharModal(modalId) {
 
 // Novo Empréstimo
 function abrirModalNovoEmprestimo() {
-  document.getElementById("modalTitulo").textContent = "Novo Empréstimo";
   document.getElementById("formEmprestimo").reset();
-  document.getElementById("disponibilidadeInfo").style.display = "none";
-  document.getElementById("disponibilidadeInfo").className = "availability-info";
-  document.getElementById("emprestimoEtiqueta").value = "";
-  document.getElementById("buscaFerramenta").value = "";
   document.getElementById("ferramentaSelecionada").classList.remove("show");
   document.getElementById("sugestoesFerramenta").classList.remove("show");
+  // limpar a div de código selecionado
+  document.getElementById("codigoSelecionado").textContent = "";
   etiquetaVerificada = false;
   abrirModal("modalEmprestimo");
 }
@@ -820,21 +817,16 @@ async function buscarFerramentas() {
 }
 
 function selecionarFerramenta(codigo, descricao) {
-  // Preencher o campo de código
-  document.getElementById("emprestimoEtiqueta").value = codigo;
-  
-  // Limpar o campo de busca para permitir nova busca
+  // preencher a div em vez do input
+  const box = document.getElementById("codigoSelecionado");
+  box.textContent = `${codigo} – ${descricao || "Sem descrição"}`;
+  box.classList.add("show");
+
   document.getElementById("buscaFerramenta").value = "";
-  
-  // Mostrar ferramenta selecionada
-  const ferramentaDiv = document.getElementById("ferramentaSelecionada");
-  ferramentaDiv.innerHTML = `<i class="fas fa-check"></i> <strong>Selecionada:</strong> ${descricao || "Sem descrição"}`;
-  ferramentaDiv.classList.add("show");
-  
-  // Esconder sugestões
   document.getElementById("sugestoesFerramenta").classList.remove("show");
-  
-  // Verificar disponibilidade automaticamente
+
+  // verificar disponibilidade
+  document.getElementById("emprestimoEtiqueta").value = codigo; // continua guardando valor oculto
   verificarDisponibilidade();
 }
 
