@@ -96,9 +96,9 @@
         <div class="rfid-filters">
           <div class="rfid-filter-group">
             <label class="rfid-filter-label">
-              <i class="fas fa-user"></i> ID Colaborador
+              <i class="fas fa-user"></i> Colaborador
             </label>
-            <input type="number" id="filtroColaborador" class="rfid-filter-input" placeholder="Digite o ID..." autocomplete="off" />
+            <input type="text" id="filtroColaborador" class="rfid-filter-input" placeholder="Nome ou ID..." autocomplete="off" />
           </div>
 
           <div class="rfid-filter-group">
@@ -189,10 +189,25 @@
           <div class="modal-body">
             <div class="form-group">
               <label class="form-label">
-                ID do Colaborador <span class="required">*</span>
+                Buscar Colaborador <span class="required">*</span>
               </label>
-              <input type="number" id="emprestimoColaborador" class="form-input" placeholder="Digite o ID do colaborador" required />
-              <div class="form-hint">Identificação numérica do colaborador</div>
+              <div class="search-container">
+                <input type="text" 
+                       id="buscaColaborador" 
+                       class="form-input" 
+                       placeholder="Digite o nome do colaborador..." 
+                       autocomplete="off" />
+                <div id="sugestoesColaborador" class="suggestions-dropdown"></div>
+              </div>
+              <div class="form-hint">Pesquise pelo nome do colaborador</div>
+              
+              <!-- Hidden field para armazenar o ID -->
+              <input type="hidden" id="emprestimoColaborador" required />
+              
+              <!-- Div para mostrar colaborador selecionado -->
+              <div id="colaboradorSelecionado" class="selected-info">
+                <!-- Será preenchido via JS -->
+              </div>
             </div>
 
             <div class="form-group">
@@ -200,7 +215,7 @@
                 Buscar Ferramenta <span class="required">*</span>
               </label>
               <div class="search-container">
-                <input type="text" id="buscaFerramenta" class="form-input" placeholder="Digite o código RFID ou nome da ferramenta..." />
+                <input type="text" id="buscaFerramenta" class="form-input" placeholder="Digite o código RFID ou nome da ferramenta..." autocomplete="off" />
                 <div id="sugestoesFerramenta" class="suggestions-dropdown"></div>
               </div>
               <div class="form-hint">Pesquise por código ou descrição da ferramenta</div>

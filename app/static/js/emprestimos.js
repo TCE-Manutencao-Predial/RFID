@@ -4,6 +4,11 @@ const registrosPorPagina = 20;
 let totalRegistros = 0;
 let etiquetaVerificada = false;
 
+// Cache de funcionários
+let cacheFuncionarios = new Map();
+let cacheTimestamp = null;
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minutos
+
 // Sistema de Toast (reutilizado do etiquetas.js)
 function showToast(message, type = "info", title = "") {
   const toastContainer = document.getElementById("toastContainer");
@@ -53,6 +58,7 @@ function showToast(message, type = "info", title = "") {
 // Inicialização
 document.addEventListener("DOMContentLoaded", function () {
   inicializarEventos();
+  carregarFuncionarios(); // Carregar funcionários no cache
   carregarDados();
   atualizarEstatisticas();
 });
@@ -84,14 +90,130 @@ function inicializarEventos() {
         buscarFerramentas();
       }
     });
-    
-    // Fechar sugestões ao clicar fora
-    document.addEventListener("click", function(e) {
-      if (!e.target.closest(".search-container")) {
-        document.getElementById("sugestoesFerramenta").classList.remove("show");
+  }
+
+  // Busca de colaboradores
+  const campoBuscaColaborador = document.getElementById("buscaColaborador");
+  if (campoBuscaColaborador) {
+    campoBuscaColaborador.addEventListener("input", debounce(buscarColaboradores, 300));
+    campoBuscaColaborador.addEventListener("focus", function() {
+      if (this.value.trim().length >= 2) {
+        buscarColaboradores();
       }
     });
   }
+  
+  // Fechar sugestões ao clicar fora
+  document.addEventListener("click", function(e) {
+    if (!e.target.closest(".search-container")) {
+      document.getElementById("sugestoesFerramenta").classList.remove("show");
+      document.getElementById("sugestoesColaborador").classList.remove("show");
+    }
+  });
+}
+
+// Funções de API de Funcionários
+async function carregarFuncionarios(forceRefresh = false) {
+  // Verificar se o cache ainda é válido
+  if (!forceRefresh && cacheFuncionarios.size > 0 && cacheTimestamp && 
+      (Date.now() - cacheTimestamp < CACHE_DURATION)) {
+    return;
+  }
+
+  try {
+    const response = await fetch('https://automacao.tce.go.gov.br/checklistpredial/api/funcionarios/listar');
+    if (!response.ok) {
+      throw new Error(`Erro HTTP: ${response.status}`);
+    }
+
+    const data = await response.json();
+    if (data.success) {
+      // Limpar cache antigo
+      cacheFuncionarios.clear();
+      
+      // Popular cache com mapeamento ID -> dados do funcionário
+      data.funcionarios.forEach(func => {
+        cacheFuncionarios.set(func.id, {
+          id: func.id,
+          nome: func.nome,
+          empresa: func.empresa
+        });
+      });
+      
+      cacheTimestamp = Date.now();
+      console.log(`Cache de funcionários atualizado: ${cacheFuncionarios.size} registros`);
+    }
+  } catch (error) {
+    console.error("Erro ao carregar funcionários:", error);
+    // Não mostrar toast aqui para não poluir a interface
+  }
+}
+
+function obterNomeFuncionario(idColaborador) {
+  const funcionario = cacheFuncionarios.get(parseInt(idColaborador));
+  if (funcionario) {
+    return `${funcionario.nome} (${funcionario.empresa})`;
+  }
+  return `ID: ${idColaborador}`;
+}
+
+async function buscarColaboradores() {
+  const termo = document.getElementById("buscaColaborador").value.trim();
+  const sugestoesDiv = document.getElementById("sugestoesColaborador");
+  
+  if (termo.length < 2) {
+    sugestoesDiv.classList.remove("show");
+    return;
+  }
+  
+  try {
+    const response = await fetch(`https://automacao.tce.go.gov.br/checklistpredial/api/funcionarios/buscar?nome=${encodeURIComponent(termo)}`);
+    const data = await response.json();
+    
+    if (data.success && data.funcionarios.length > 0) {
+      sugestoesDiv.innerHTML = "";
+      
+      // Limitar a 10 sugestões
+      const funcionarios = data.funcionarios.slice(0, 10);
+      
+      funcionarios.forEach(func => {
+        const item = document.createElement("div");
+        item.className = "suggestion-item";
+        item.innerHTML = `
+          <div class="etiqueta-codigo">${func.nome}</div>
+          <div class="etiqueta-descricao">${func.empresa}</div>
+        `;
+        
+        item.addEventListener("click", function() {
+          selecionarColaborador(func.id, func.nome, func.empresa);
+        });
+        
+        sugestoesDiv.appendChild(item);
+      });
+      
+      sugestoesDiv.classList.add("show");
+    } else {
+      sugestoesDiv.innerHTML = '<div class="no-results">Nenhum colaborador encontrado</div>';
+      sugestoesDiv.classList.add("show");
+    }
+  } catch (error) {
+    console.error("Erro ao buscar colaboradores:", error);
+    sugestoesDiv.classList.remove("show");
+  }
+}
+
+function selecionarColaborador(id, nome, empresa) {
+  // Preencher o campo hidden com o ID
+  document.getElementById("emprestimoColaborador").value = id;
+  
+  // Mostrar informações do colaborador selecionado
+  const box = document.getElementById("colaboradorSelecionado");
+  box.textContent = `${nome} - ${empresa}`;
+  box.classList.add("show");
+  
+  // Limpar busca e esconder sugestões
+  document.getElementById("buscaColaborador").value = "";
+  document.getElementById("sugestoesColaborador").classList.remove("show");
 }
 
 function debounce(func, wait) {
@@ -112,6 +234,7 @@ function aplicarFiltros() {
 }
 
 function atualizarDados() {
+  carregarFuncionarios(true); // Atualizar cache de funcionários
   carregarDados(true, true);
 }
 
@@ -205,7 +328,16 @@ function obterFiltros() {
   const filtros = {};
 
   const colaborador = document.getElementById("filtroColaborador").value.trim();
-  if (colaborador) filtros.id_colaborador = colaborador;
+  if (colaborador) {
+    // Verificar se é número (ID) ou texto (nome)
+    if (/^\d+$/.test(colaborador)) {
+      filtros.id_colaborador = colaborador;
+    } else {
+      // Por enquanto, ainda filtra por ID. 
+      // No futuro, pode implementar busca por nome no backend
+      // ou buscar IDs correspondentes ao nome
+    }
+  }
 
   const etiqueta = document.getElementById("filtroEtiqueta").value.trim();
   if (etiqueta) filtros.etiqueta = etiqueta;
@@ -246,6 +378,9 @@ function renderizarTabela(emprestimos) {
 
   emprestimos.forEach((emprestimo) => {
     const tr = document.createElement("tr");
+
+    // Obter nome do colaborador
+    const nomeColaborador = obterNomeFuncionario(emprestimo.id_colaborador);
 
     // Determinar status e ações
     let statusBadge;
@@ -289,7 +424,7 @@ function renderizarTabela(emprestimos) {
 
     tr.innerHTML = `
       <td>${emprestimo.id}</td>
-      <td>${emprestimo.id_colaborador}</td>
+      <td title="${nomeColaborador}">${nomeColaborador}</td>
       <td>
         <span class="rfid-etiqueta">${emprestimo.EtiquetaRFID_hex}</span>
         <br>
@@ -456,6 +591,8 @@ function fecharModal(modalId) {
   if (modalId === "modalEmprestimo") {
     document.getElementById("formEmprestimo").reset();
     document.getElementById("disponibilidadeInfo").style.display = "none";
+    document.getElementById("colaboradorSelecionado").textContent = "";
+    document.getElementById("colaboradorSelecionado").classList.remove("show");
     etiquetaVerificada = false;
   }
 }
@@ -465,8 +602,11 @@ function abrirModalNovoEmprestimo() {
   document.getElementById("formEmprestimo").reset();
   document.getElementById("ferramentaSelecionada").classList.remove("show");
   document.getElementById("sugestoesFerramenta").classList.remove("show");
-  // limpar a div de código selecionado
+  document.getElementById("sugestoesColaborador").classList.remove("show");
+  // limpar as divs selecionadas
   document.getElementById("codigoSelecionado").textContent = "";
+  document.getElementById("colaboradorSelecionado").textContent = "";
+  document.getElementById("colaboradorSelecionado").classList.remove("show");
   etiquetaVerificada = false;
   abrirModal("modalEmprestimo");
 }
@@ -494,7 +634,9 @@ async function verificarDisponibilidade() {
       let mensagem = `<i class="fas fa-times-circle"></i> ${data.motivo}`;
 
       if (data.emprestimo_ativo) {
-        mensagem += ` (Colaborador: ${data.emprestimo_ativo.id_colaborador})`;
+        // Buscar nome do colaborador
+        const nomeColaborador = obterNomeFuncionario(data.emprestimo_ativo.id_colaborador);
+        mensagem += ` (${nomeColaborador})`;
       }
 
       infoDiv.innerHTML = mensagem;
@@ -566,7 +708,11 @@ async function salvarEmprestimo(event) {
 // Devolução
 function abrirModalDevolucao(id, colaborador, etiqueta, descricao, dataEmprestimo) {
   document.getElementById("devolucaoId").value = id;
-  document.getElementById("devolucaoColaborador").textContent = colaborador;
+  
+  // Buscar nome do colaborador
+  const nomeColaborador = obterNomeFuncionario(colaborador);
+  document.getElementById("devolucaoColaborador").textContent = nomeColaborador;
+  
   document.getElementById("devolucaoFerramenta").textContent = `${etiqueta} - ${descricao || "Sem descrição"}`;
   document.getElementById("devolucaoDataEmprestimo").textContent = dataEmprestimo;
 
@@ -648,6 +794,8 @@ async function abrirModalPendentes() {
     if (data.success && data.emprestimos.length > 0) {
       data.emprestimos.forEach((emp) => {
         const tempo = calcularTempoDecorrido(emp.dataEmprestimo);
+        const nomeColaborador = obterNomeFuncionario(emp.id_colaborador);
+        
         const card = document.createElement("div");
         card.className = `pendente-card ${tempo.alerta ? "alerta" : ""}`;
 
@@ -659,7 +807,7 @@ async function abrirModalPendentes() {
             <h4>${emp.descricao_ferramenta || "Ferramenta sem descrição"}</h4>
             <div class="pendente-details">
               <div class="pendente-detail">
-                <strong>Colaborador:</strong> ${emp.id_colaborador}
+                <strong>Colaborador:</strong> ${nomeColaborador}
               </div>
               <div class="pendente-detail">
                 <strong>Etiqueta:</strong> ${emp.EtiquetaRFID_hex}
