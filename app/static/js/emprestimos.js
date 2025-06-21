@@ -275,15 +275,28 @@ async function carregarDados(forceRefresh = false, showToastMessage = false) {
   try {
     const offset = (paginaAtual - 1) * registrosPorPagina;
     const filtros = obterFiltros();
+    
+    // Guardar o filtro de colaborador para aplicar no frontend
+    const filtroColaboradorTexto = document.getElementById("filtroColaborador").value.trim();
 
     const params = new URLSearchParams({
       limite: registrosPorPagina,
       offset: offset,
-      ...filtros,
     });
+
+    // Adicionar outros filtros (exceto colaborador que será filtrado no frontend)
+    if (filtros.etiqueta) params.append('etiqueta', filtros.etiqueta);
+    if (filtros.status) params.append('status', filtros.status);
+    if (filtros.data_inicio) params.append('data_inicio', filtros.data_inicio);
+    if (filtros.data_fim) params.append('data_fim', filtros.data_fim);
 
     if (forceRefresh) {
       params.append("force_refresh", "true");
+    }
+
+    // Se há filtro de colaborador, buscar mais registros para compensar a filtragem no frontend
+    if (filtroColaboradorTexto) {
+      params.set('limite', registrosPorPagina * 5); // Buscar 5x mais registros
     }
 
     const url = `/RFID/api/emprestimos?${params}`;
@@ -296,13 +309,39 @@ async function carregarDados(forceRefresh = false, showToastMessage = false) {
     const data = await response.json();
 
     if (data.success) {
-      totalRegistros = data.total;
-      renderizarTabela(data.emprestimos);
+      let emprestimos = data.emprestimos;
+      
+      // Aplicar filtro de colaborador no frontend se necessário
+      if (filtroColaboradorTexto) {
+        const textoBusca = filtroColaboradorTexto.toLowerCase();
+        
+        emprestimos = emprestimos.filter(emp => {
+          const funcionario = cacheFuncionarios.get(parseInt(emp.id_colaborador));
+          if (!funcionario) return false;
+          
+          const nomeCompleto = `${funcionario.nome} ${funcionario.empresa}`.toLowerCase();
+          
+          return funcionario.nome.toLowerCase().includes(textoBusca) || 
+                 funcionario.empresa.toLowerCase().includes(textoBusca) ||
+                 nomeCompleto.includes(textoBusca);
+        });
+        
+        // Ajustar total de registros
+        totalRegistros = emprestimos.length;
+        
+        // Aplicar paginação manualmente
+        const inicio = (paginaAtual - 1) * registrosPorPagina;
+        emprestimos = emprestimos.slice(inicio, inicio + registrosPorPagina);
+      } else {
+        totalRegistros = data.total;
+      }
+      
+      renderizarTabela(emprestimos);
       atualizarPaginacao();
 
-      if (showToastMessage && data.emprestimos.length > 0) {
+      if (showToastMessage && emprestimos.length > 0) {
         const cacheInfo = data.from_cache ? " (do cache)" : " (atualizado)";
-        showToast(`${data.emprestimos.length} empréstimos carregados${cacheInfo}`, "success");
+        showToast(`${emprestimos.length} empréstimos carregados${cacheInfo}`, "success");
       }
     } else {
       throw new Error(data.error || "Erro ao carregar dados");
@@ -327,17 +366,8 @@ async function carregarDados(forceRefresh = false, showToastMessage = false) {
 function obterFiltros() {
   const filtros = {};
 
-  const colaborador = document.getElementById("filtroColaborador").value.trim();
-  if (colaborador) {
-    // Verificar se é número (ID) ou texto (nome)
-    if (/^\d+$/.test(colaborador)) {
-      filtros.id_colaborador = colaborador;
-    } else {
-      // Por enquanto, ainda filtra por ID. 
-      // No futuro, pode implementar busca por nome no backend
-      // ou buscar IDs correspondentes ao nome
-    }
-  }
+  // Nota: o filtro de colaborador será aplicado no frontend
+  // por isso não é adicionado aqui
 
   const etiqueta = document.getElementById("filtroEtiqueta").value.trim();
   if (etiqueta) filtros.etiqueta = etiqueta;
