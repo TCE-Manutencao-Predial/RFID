@@ -871,12 +871,156 @@ async function atualizarEstatisticas() {
 }
 
 // Funções auxiliares
-function visualizarDetalhes(id) {
-  showToast("Funcionalidade de detalhes será implementada em breve!", "info");
+async function visualizarDetalhes(id) {
+  try {
+    // Buscar o empréstimo específico
+    const response = await fetch(`/RFID/api/emprestimos?limite=1&offset=0`);
+    const data = await response.json();
+    
+    if (data.success) {
+      // Encontrar o empréstimo pelo ID
+      const emprestimo = data.emprestimos.find(e => e.id === id);
+      
+      if (emprestimo) {
+        // Criar modal de detalhes
+        const modalHtml = `
+          <div class="modal-overlay" id="modalDetalhes" style="display: block;">
+            <div class="modal">
+              <div class="modal-header">
+                <h3 class="modal-title">
+                  <i class="fas fa-info-circle"></i>
+                  Detalhes do Empréstimo #${emprestimo.id}
+                </h3>
+                <button class="modal-close" onclick="document.getElementById('modalDetalhes').remove()">
+                  <i class="fas fa-times"></i>
+                </button>
+              </div>
+              <div class="modal-body">
+                <div class="info-devolucao">
+                  <p><strong>ID do Empréstimo:</strong> ${emprestimo.id}</p>
+                  <p><strong>Colaborador:</strong> ${obterNomeFuncionario(emprestimo.id_colaborador)}</p>
+                  <p><strong>Ferramenta:</strong> ${emprestimo.EtiquetaRFID_hex}</p>
+                  <p><strong>Descrição:</strong> ${emprestimo.descricao_ferramenta || "Sem descrição"}</p>
+                  <p><strong>Data do Empréstimo:</strong> ${emprestimo.dataEmprestimo_formatada}</p>
+                  <p><strong>Data da Devolução:</strong> ${emprestimo.dataDevolucao_formatada || "Não devolvido"}</p>
+                  <p><strong>Status:</strong> ${emprestimo.status === 'ativo' ? 'Em Empréstimo' : 'Devolvido'}</p>
+                  ${emprestimo.Observacao ? `<p><strong>Observações:</strong> ${emprestimo.Observacao}</p>` : ''}
+                </div>
+              </div>
+              <div class="modal-footer">
+                <button type="button" class="rfid-btn rfid-btn-primary" onclick="document.getElementById('modalDetalhes').remove()">
+                  <i class="fas fa-times"></i> Fechar
+                </button>
+              </div>
+            </div>
+          </div>
+        `;
+        
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        
+        // Adicionar classe active após inserir
+        setTimeout(() => {
+          document.getElementById('modalDetalhes').classList.add('active');
+        }, 10);
+      } else {
+        showToast("Empréstimo não encontrado", "error");
+      }
+    }
+  } catch (error) {
+    console.error("Erro ao buscar detalhes:", error);
+    showToast("Erro ao carregar detalhes do empréstimo", "error");
+  }
 }
 
-function verHistoricoFerramenta(etiqueta) {
-  showToast(`Histórico da ferramenta ${etiqueta} será implementado em breve!`, "info");
+async function verHistoricoFerramenta(etiqueta) {
+  try {
+    const response = await fetch(`/RFID/api/emprestimos/ferramenta/${etiqueta}/historico`);
+    const data = await response.json();
+    
+    if (data.success && data.emprestimos) {
+      // Criar modal de histórico
+      let historicoHtml = '';
+      
+      if (data.emprestimos.length > 0) {
+        // Ordenar por data decrescente
+        const emprestimos = data.emprestimos.sort((a, b) => {
+          return new Date(b.dataEmprestimo) - new Date(a.dataEmprestimo);
+        });
+        
+        historicoHtml = emprestimos.map(emp => {
+          const colaborador = obterNomeFuncionario(emp.id_colaborador);
+          const status = emp.status === 'ativo' ? 
+            '<span class="rfid-badge rfid-badge-active">Em Empréstimo</span>' : 
+            '<span class="rfid-badge rfid-badge-destroyed">Devolvido</span>';
+          
+          return `
+            <div class="pendente-card" style="margin-bottom: 10px;">
+              <div class="pendente-info">
+                <div class="pendente-details">
+                  <div class="pendente-detail">
+                    <strong>Colaborador:</strong> ${colaborador}
+                  </div>
+                  <div class="pendente-detail">
+                    <strong>Empréstimo:</strong> ${emp.dataEmprestimo_formatada}
+                  </div>
+                  <div class="pendente-detail">
+                    <strong>Devolução:</strong> ${emp.dataDevolucao_formatada || "Não devolvido"}
+                  </div>
+                  <div class="pendente-detail">
+                    <strong>Status:</strong> ${status}
+                  </div>
+                </div>
+              </div>
+            </div>
+          `;
+        }).join('');
+      } else {
+        historicoHtml = '<p style="text-align: center; color: #666;">Nenhum histórico encontrado para esta ferramenta.</p>';
+      }
+      
+      const modalHtml = `
+        <div class="modal-overlay" id="modalHistorico" style="display: block;">
+          <div class="modal modal-large">
+            <div class="modal-header">
+              <h3 class="modal-title">
+                <i class="fas fa-history"></i>
+                Histórico da Ferramenta
+              </h3>
+              <button class="modal-close" onclick="document.getElementById('modalHistorico').remove()">
+                <i class="fas fa-times"></i>
+              </button>
+            </div>
+            <div class="modal-body">
+              <div class="info-devolucao" style="margin-bottom: 20px;">
+                <p><strong>Etiqueta RFID:</strong> ${etiqueta}</p>
+                <p><strong>Total de Empréstimos:</strong> ${data.total || data.emprestimos.length}</p>
+              </div>
+              <div style="max-height: 400px; overflow-y: auto;">
+                ${historicoHtml}
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="rfid-btn rfid-btn-primary" onclick="document.getElementById('modalHistorico').remove()">
+                <i class="fas fa-times"></i> Fechar
+              </button>
+            </div>
+          </div>
+        </div>
+      `;
+      
+      document.body.insertAdjacentHTML('beforeend', modalHtml);
+      
+      // Adicionar classe active após inserir
+      setTimeout(() => {
+        document.getElementById('modalHistorico').classList.add('active');
+      }, 10);
+    } else {
+      showToast("Erro ao carregar histórico", "error");
+    }
+  } catch (error) {
+    console.error("Erro ao buscar histórico:", error);
+    showToast("Erro ao carregar histórico da ferramenta", "error");
+  }
 }
 
 function exportarDados() {
