@@ -7,21 +7,38 @@
   color: rgba(255, 255, 255, 0.9);
 }
 
-/* Filtro de data (período) */
+/* Filtro de data (período) - CORRIGIDO */
 .date-range {
   display: flex;
   align-items: center;
   gap: 10px;
+  width: 100%;
+  min-width: 0; /* Importante para flexbox */
 }
 
 .date-separator {
   color: #6c757d;
   font-size: 0.9rem;
   font-weight: 500;
+  flex-shrink: 0; /* Não deixa o separador encolher */
 }
 
 .date-range .rfid-filter-input {
   flex: 1;
+  min-width: 0; /* Permite que o input encolha se necessário */
+  max-width: 100%; /* Garante que não exceda o container */
+}
+
+/* Ajuste no grid dos filtros para melhor responsividade */
+.rfid-filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 15px;
+}
+
+/* Ajuste específico para o grupo de filtro de período */
+.rfid-filter-group:has(.date-range) {
+  grid-column: span 2; /* Ocupa 2 colunas quando tem date-range */
 }
 
 /* Input com botão ao lado */
@@ -310,7 +327,27 @@
 }
 
 /* Responsividade */
+@media (max-width: 1200px) {
+  /* Ajuste para telas médias */
+  .rfid-filters {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  .rfid-filter-group:has(.date-range) {
+    grid-column: span 2; /* Continua ocupando toda a largura */
+  }
+}
+
 @media (max-width: 768px) {
+  /* Ajuste para tablets */
+  .rfid-filters {
+    grid-template-columns: 1fr;
+  }
+  
+  .rfid-filter-group:has(.date-range) {
+    grid-column: span 1; /* Volta a ocupar apenas 1 coluna */
+  }
+  
   .date-range {
     flex-direction: column;
     align-items: stretch;
@@ -487,4 +524,21 @@
   z-index: 10;
   /* opcional: padding extra para espaçamento */
   padding: 15px 20px;
+}
+
+/* Correção adicional para o container de controles */
+.rfid-controls {
+  overflow: hidden; /* Previne que conteúdo exceda o container */
+}
+
+/* Ajuste para telas muito largas */
+@media (min-width: 1400px) {
+  .rfid-filters {
+    grid-template-columns: repeat(4, 1fr);
+  }
+  
+  /* Em telas grandes, o período pode ocupar apenas 1 coluna se houver espaço */
+  .rfid-filter-group:has(.date-range) {
+    grid-column: span 1;
+  }
 }
