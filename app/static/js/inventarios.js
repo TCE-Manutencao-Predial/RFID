@@ -9,11 +9,6 @@ let itensInventarioAtual = [];
 let paginaAtual = 1;
 const itensPorPagina = 20;
 
-// Cache de funcionários
-let cacheFuncionarios = new Map();
-let cacheTimestamp = null;
-const CACHE_DURATION = 5 * 60 * 1000; // 5 minutos
-
 // ========================================================================
 // FUNÇÕES DE INICIALIZAÇÃO
 // ========================================================================
@@ -22,12 +17,9 @@ const CACHE_DURATION = 5 * 60 * 1000; // 5 minutos
 document.addEventListener('DOMContentLoaded', function() {
     console.log('Sistema de Inventários RFID inicializado');
     
-    // Carregar funcionários primeiro
-    carregarFuncionarios().then(() => {
-        // Carregar dados iniciais após carregar funcionários
-        carregarInventarios();
-        carregarEstatisticas();
-    });
+    // Carregar dados iniciais
+    carregarInventarios();
+    carregarEstatisticas();
     
     // Configurar event listeners
     configurarEventListeners();
@@ -72,52 +64,8 @@ function configurarEventListeners() {
 }
 
 // ========================================================================
-// FUNÇÕES DE API DE FUNCIONÁRIOS
+// FUNÇÕES DE API DE FUNCIONÁRIOS (apenas para criar inventário)
 // ========================================================================
-
-async function carregarFuncionarios(forceRefresh = false) {
-    // Verificar se o cache ainda é válido
-    if (!forceRefresh && cacheFuncionarios.size > 0 && cacheTimestamp && 
-        (Date.now() - cacheTimestamp < CACHE_DURATION)) {
-        return;
-    }
-
-    try {
-        const response = await fetch('https://automacao.tce.go.gov.br/checklistpredial/api/funcionarios/listar');
-        if (!response.ok) {
-            throw new Error(`Erro HTTP: ${response.status}`);
-        }
-
-        const data = await response.json();
-        if (data.success) {
-            // Limpar cache antigo
-            cacheFuncionarios.clear();
-            
-            // Popular cache com mapeamento ID -> dados do funcionário
-            data.funcionarios.forEach(func => {
-                cacheFuncionarios.set(func.id, {
-                    id: func.id,
-                    nome: func.nome,
-                    empresa: func.empresa
-                });
-            });
-            
-            cacheTimestamp = Date.now();
-            console.log(`Cache de funcionários atualizado: ${cacheFuncionarios.size} registros`);
-        }
-    } catch (error) {
-        console.error("Erro ao carregar funcionários:", error);
-        // Não mostrar toast aqui para não poluir a interface
-    }
-}
-
-function obterNomeFuncionario(idColaborador) {
-    const funcionario = cacheFuncionarios.get(parseInt(idColaborador));
-    if (funcionario) {
-        return `${funcionario.nome} (${funcionario.empresa})`;
-    }
-    return `ID: ${idColaborador}`;
-}
 
 async function buscarColaboradores() {
     const termo = document.getElementById('buscaColaboradorInventario').value.trim();
@@ -220,13 +168,9 @@ async function carregarInventarios() {
         
         const params = new URLSearchParams({
             limite: itensPorPagina,
-            offset: offset
+            offset: offset,
+            ...filtros
         });
-        
-        // Adicionar filtros
-        if (filtros.status) params.append('status', filtros.status);
-        if (filtros.data_inicio) params.append('data_inicio', filtros.data_inicio);
-        if (filtros.data_fim) params.append('data_fim', filtros.data_fim);
         
         const response = await fetch(`/RFID/api/inventarios?${params}`);
         const data = await response.json();
@@ -784,11 +728,8 @@ function aplicarFiltros() {
 }
 
 function atualizarDados() {
-    // Atualizar cache de funcionários e depois os dados
-    carregarFuncionarios(true).then(() => {
-        carregarInventarios();
-        carregarEstatisticas();
-    });
+    carregarInventarios();
+    carregarEstatisticas();
 }
 
 function mostrarLoading(mostrar) {
