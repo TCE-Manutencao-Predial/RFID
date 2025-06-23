@@ -118,47 +118,50 @@ class GerenciadorInventariosRFID:
             dataInventario = dados.get('dataInventario', datetime.now())
             observacao = dados.get('Observacao', '')
             
-            # Inserir inventário
-            insert_query = """
-                INSERT INTO inventariosRFID 
-                (dataInventario, id_colaborador, Observacao, Status)
-                VALUES (%s, %s, %s, %s)
-            """
-            
-            cursor.execute(insert_query, (
-                dataInventario,
-                dados['id_colaborador'],
-                observacao,
-                'Em andamento'
-            ))
-            
-            id_inventario = cursor.lastrowid
-            
             # Obter todas as etiquetas ativas
             etiquetas_result = self.gerenciador_etiquetas.obter_etiquetas(
                 filtros={'destruida': 0},
                 limite=10000  # Buscar todas
             )
             
-            if etiquetas_result['success']:
-                # Inserir todas as etiquetas como não localizadas inicialmente
-                for etiqueta in etiquetas_result['etiquetas']:
-                    insert_item_query = """
-                        INSERT INTO inventarioitensRFID 
-                        (idInventarioRFID, EtiquetaRFID_hex, Status, CodigoLeitor, Observacao)
-                        VALUES (%s, %s, %s, %s, %s)
-                    """
-                    
-                    cursor.execute(insert_item_query, (
-                        id_inventario,
-                        etiqueta['EtiquetaRFID_hex'],
-                        'Não localizado',
-                        None,
-                        None
-                    ))
+            if not etiquetas_result['success']:
+                return {
+                    'success': False,
+                    'error': 'Erro ao obter etiquetas ativas'
+                }
+            
+            etiquetas = etiquetas_result['etiquetas']
+            total_etiquetas = len(etiquetas)
+            
+            # Criar lista de etiquetas como JSON
+            lista_etiquetas = [{'hex': e['EtiquetaRFID_hex'], 'status': 'nao_localizado'} 
+                             for e in etiquetas]
             
             # Processar leituras dos últimos 6 meses
-            self._processar_leituras_historicas(id_inventario)
+            localizados = self._processar_leituras_historicas(lista_etiquetas)
+            
+            # Calcular estatísticas
+            total_localizados = sum(1 for item in lista_etiquetas if item['status'] == 'localizado')
+            
+            # Inserir inventário - NÃO especificar o id pois é auto_increment
+            insert_query = """
+                INSERT INTO inventariosRFID 
+                (dataInventario, id_colaborador, Observacao, Status, itens_json, 
+                 total_itens, itens_localizados)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+            """
+            
+            cursor.execute(insert_query, (
+                dataInventario,
+                dados['id_colaborador'],
+                observacao,
+                'Em andamento',
+                json.dumps(lista_etiquetas),
+                total_etiquetas,
+                total_localizados
+            ))
+            
+            id_inventario = cursor.lastrowid
             
             # Limpar cache
             self.limpar_cache()
@@ -167,7 +170,8 @@ class GerenciadorInventariosRFID:
                 'success': True,
                 'message': 'Inventário criado com sucesso',
                 'id_inventario': id_inventario,
-                'total_etiquetas': len(etiquetas_result['etiquetas']) if etiquetas_result['success'] else 0
+                'total_etiquetas': total_etiquetas,
+                'etiquetas_localizadas': total_localizados
             }
             
         except Error as e:
@@ -182,73 +186,50 @@ class GerenciadorInventariosRFID:
             if connection:
                 connection.close()
     
-    def _processar_leituras_historicas(self, id_inventario):
+    def _processar_leituras_historicas(self, lista_etiquetas):
         """
         Processa leituras históricas dos últimos 6 meses para marcar itens como localizados.
         
         Args:
-            id_inventario (int): ID do inventário
+            lista_etiquetas (list): Lista de dicionários com etiquetas
+            
+        Returns:
+            int: Número de etiquetas localizadas
         """
-        connection = None
-        cursor = None
-        
         try:
-            connection = self._get_connection()
-            cursor = connection.cursor()
-            
             # Data de 6 meses atrás
-            data_inicio = datetime.now() - timedelta(days=180)
+            data_inicio = (datetime.now() - timedelta(days=180)).strftime('%Y-%m-%d %H:%M:%S')
             
-            # Buscar etiquetas com leituras nos últimos 6 meses
-            query_leituras = """
-                SELECT DISTINCT 
-                    l.EtiquetaRFID_hex,
-                    l.CodigoLeitor,
-                    MAX(l.Horario) as UltimaLeitura
-                FROM leitoresRFID l
-                INNER JOIN inventarioitensRFID i ON l.EtiquetaRFID_hex = i.EtiquetaRFID_hex
-                WHERE i.idInventarioRFID = %s 
-                    AND l.Horario >= %s
-                    AND l.RSSI != 0
-                GROUP BY l.EtiquetaRFID_hex, l.CodigoLeitor
-            """
+            # Criar mapa para busca rápida
+            etiquetas_map = {item['hex']: item for item in lista_etiquetas}
             
-            cursor.execute(query_leituras, (id_inventario, data_inicio))
-            leituras = cursor.fetchall()
+            # Buscar leituras dos últimos 6 meses
+            resultado_leituras = self.gerenciador_leitores.obter_leituras(
+                filtros={
+                    'horario_inicio': data_inicio,
+                    'horario_fim': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                },
+                limite=10000  # Buscar muitas leituras
+            )
             
-            # Atualizar status dos itens encontrados
-            for leitura in leituras:
-                update_query = """
-                    UPDATE inventarioitensRFID
-                    SET Status = %s,
-                        CodigoLeitor = %s,
-                        Observacao = %s,
-                        dataInventario = %s
-                    WHERE idInventarioRFID = %s 
-                        AND EtiquetaRFID_hex = %s
-                        AND Status = 'Não localizado'
-                """
+            if resultado_leituras['success']:
+                # Processar leituras únicas por etiqueta
+                etiquetas_lidas = set()
                 
-                observacao = f"Localizado no BD (Última leitura: {leitura[2].strftime('%d/%m/%Y %H:%M')})"
+                for leitura in resultado_leituras['leituras']:
+                    etiqueta_hex = leitura.get('etiqueta_hex')
+                    if etiqueta_hex and etiqueta_hex in etiquetas_map:
+                        etiquetas_lidas.add(etiqueta_hex)
+                        etiquetas_map[etiqueta_hex]['status'] = 'localizado'
+                        etiquetas_map[etiqueta_hex]['data_leitura'] = leitura.get('horario_formatado', '')
+                        etiquetas_map[etiqueta_hex]['codigo_leitor'] = leitura.get('codigo_leitor', '')
                 
-                cursor.execute(update_query, (
-                    'Localizado',
-                    leitura[1],  # CodigoLeitor
-                    observacao,
-                    leitura[2],  # UltimaLeitura como dataInventario
-                    id_inventario,
-                    leitura[0]   # EtiquetaRFID_hex
-                ))
+                return len(etiquetas_lidas)
             
-            self.logger.info(f"Processadas {len(leituras)} leituras históricas para inventário {id_inventario}")
-            
-        except Error as e:
+        except Exception as e:
             self.logger.error(f"Erro ao processar leituras históricas: {e}")
-        finally:
-            if cursor:
-                cursor.close()
-            if connection:
-                connection.close()
+        
+        return 0
     
     def processar_csv_leituras(self, id_inventario, arquivo_csv):
         """
@@ -269,7 +250,32 @@ class GerenciadorInventariosRFID:
         
         try:
             connection = self._get_connection()
-            cursor = connection.cursor()
+            cursor = connection.cursor(dictionary=True)
+            
+            # Buscar inventário
+            query = """
+                SELECT id, itens_json, Status, total_itens, itens_localizados
+                FROM inventariosRFID
+                WHERE id = %s
+            """
+            cursor.execute(query, (id_inventario,))
+            inventario = cursor.fetchone()
+            
+            if not inventario:
+                return {
+                    'success': False,
+                    'error': 'Inventário não encontrado'
+                }
+            
+            if inventario['Status'] != 'Em andamento':
+                return {
+                    'success': False,
+                    'error': 'Inventário já foi finalizado'
+                }
+            
+            # Carregar itens do JSON
+            itens = json.loads(inventario['itens_json'])
+            itens_map = {item['hex']: item for item in itens}
             
             # Processar CSV
             if isinstance(arquivo_csv, str):
@@ -300,40 +306,30 @@ class GerenciadorInventariosRFID:
                     continue
                 
                 # Verificar se a etiqueta existe no inventário
-                check_query = """
-                    SELECT Status
-                    FROM inventarioitensRFID
-                    WHERE idInventarioRFID = %s AND EtiquetaRFID_hex = %s
-                """
-                
-                cursor.execute(check_query, (id_inventario, epc))
-                result = cursor.fetchone()
-                
-                if not result:
-                    erros.append(f"EPC {epc}: não encontrado no inventário")
-                    continue
-                
-                # Atualizar apenas se ainda não foi localizado
-                if result[0] == 'Não localizado':
-                    update_query = """
-                        UPDATE inventarioitensRFID
-                        SET Status = %s,
-                            CodigoLeitor = %s,
-                            Observacao = %s,
-                            dataInventario = %s
-                        WHERE idInventarioRFID = %s AND EtiquetaRFID_hex = %s
-                    """
-                    
-                    cursor.execute(update_query, (
-                        'Localizado',
-                        'MOBILE',  # Indicar que foi leitor móvel
-                        'Localizado via leitor móvel',
-                        datetime.now(),
-                        id_inventario,
-                        epc
-                    ))
-                    
-                    etiquetas_atualizadas += 1
+                if epc in itens_map:
+                    if itens_map[epc]['status'] == 'nao_localizado':
+                        itens_map[epc]['status'] = 'localizado'
+                        itens_map[epc]['data_leitura'] = datetime.now().strftime('%d/%m/%Y %H:%M')
+                        itens_map[epc]['codigo_leitor'] = 'MOBILE'
+                        etiquetas_atualizadas += 1
+                else:
+                    erros.append(f"EPC {epc}: não faz parte deste inventário")
+            
+            # Atualizar inventário no banco
+            total_localizados = sum(1 for item in itens if item['status'] == 'localizado')
+            
+            update_query = """
+                UPDATE inventariosRFID
+                SET itens_json = %s,
+                    itens_localizados = %s
+                WHERE id = %s
+            """
+            
+            cursor.execute(update_query, (
+                json.dumps(itens),
+                total_localizados,
+                id_inventario
+            ))
             
             # Limpar cache
             self.limpar_cache()
@@ -396,15 +392,14 @@ class GerenciadorInventariosRFID:
             # Query base
             base_query = """
                 SELECT 
-                    i.idInventarioRFID,
-                    i.dataInventario,
-                    i.id_colaborador,
-                    i.Observacao,
-                    i.Status,
-                    COUNT(DISTINCT ii.EtiquetaRFID_hex) as total_itens,
-                    SUM(CASE WHEN ii.Status = 'Localizado' THEN 1 ELSE 0 END) as itens_localizados
-                FROM inventariosRFID i
-                LEFT JOIN inventarioitensRFID ii ON i.idInventarioRFID = ii.idInventarioRFID
+                    id as idInventarioRFID,
+                    dataInventario,
+                    id_colaborador,
+                    Observacao,
+                    Status,
+                    total_itens,
+                    itens_localizados
+                FROM inventariosRFID
                 WHERE 1=1
             """
             
@@ -413,25 +408,23 @@ class GerenciadorInventariosRFID:
             
             if filtros:
                 if filtros.get('status'):
-                    where_conditions.append("i.Status = %s")
+                    where_conditions.append("Status = %s")
                     params.append(filtros['status'])
                 
                 if filtros.get('id_colaborador'):
-                    where_conditions.append("i.id_colaborador = %s")
+                    where_conditions.append("id_colaborador = %s")
                     params.append(filtros['id_colaborador'])
                 
                 if filtros.get('data_inicio'):
-                    where_conditions.append("DATE(i.dataInventario) >= %s")
+                    where_conditions.append("DATE(dataInventario) >= %s")
                     params.append(filtros['data_inicio'])
                 
                 if filtros.get('data_fim'):
-                    where_conditions.append("DATE(i.dataInventario) <= %s")
+                    where_conditions.append("DATE(dataInventario) <= %s")
                     params.append(filtros['data_fim'])
             
             if where_conditions:
                 base_query += " AND " + " AND ".join(where_conditions)
-            
-            base_query += " GROUP BY i.idInventarioRFID"
             
             # Contar total
             count_query = f"SELECT COUNT(*) as total FROM ({base_query}) as subquery"
@@ -439,7 +432,7 @@ class GerenciadorInventariosRFID:
             total = cursor.fetchone()['total']
             
             # Obter dados com paginação
-            data_query = base_query + " ORDER BY i.dataInventario DESC LIMIT %s OFFSET %s"
+            data_query = base_query + " ORDER BY dataInventario DESC LIMIT %s OFFSET %s"
             params.extend([limite, offset])
             
             cursor.execute(data_query, params)
@@ -504,13 +497,16 @@ class GerenciadorInventariosRFID:
             # Obter dados do inventário
             query_inventario = """
                 SELECT 
-                    idInventarioRFID,
+                    id as idInventarioRFID,
                     dataInventario,
                     id_colaborador,
                     Observacao,
-                    Status
+                    Status,
+                    itens_json,
+                    total_itens,
+                    itens_localizados
                 FROM inventariosRFID
-                WHERE idInventarioRFID = %s
+                WHERE id = %s
             """
             
             cursor.execute(query_inventario, (id_inventario,))
@@ -522,45 +518,51 @@ class GerenciadorInventariosRFID:
                     'error': 'Inventário não encontrado'
                 }
             
-            # Obter itens do inventário
-            query_itens = """
-                SELECT 
-                    ii.EtiquetaRFID_hex,
-                    ii.Status,
-                    ii.CodigoLeitor,
-                    ii.Observacao as ObservacaoItem,
-                    ii.dataInventario as dataLocalizacao,
-                    e.Descricao as DescricaoEtiqueta
-                FROM inventarioitensRFID ii
-                LEFT JOIN etiquetasRFID e ON ii.EtiquetaRFID_hex = e.EtiquetaRFID_hex
-                WHERE ii.idInventarioRFID = %s
-                ORDER BY ii.Status DESC, e.Descricao
-            """
+            # Processar itens do JSON
+            itens = json.loads(inventario['itens_json'])
             
-            cursor.execute(query_itens, (id_inventario,))
-            itens = cursor.fetchall()
+            # Buscar descrições das etiquetas
+            etiquetas_hex = [item['hex'] for item in itens]
+            if etiquetas_hex:
+                # Buscar descrições em lotes
+                placeholders = ','.join(['%s'] * len(etiquetas_hex))
+                query_descricoes = f"""
+                    SELECT EtiquetaRFID_hex, Descricao
+                    FROM etiquetasRFID
+                    WHERE EtiquetaRFID_hex IN ({placeholders})
+                """
+                cursor.execute(query_descricoes, etiquetas_hex)
+                
+                # Criar mapa de descrições
+                descricoes = {row['EtiquetaRFID_hex']: row['Descricao'] 
+                             for row in cursor.fetchall()}
+                
+                # Adicionar descrições aos itens
+                for item in itens:
+                    item['EtiquetaRFID_hex'] = item['hex']
+                    item['Status'] = 'Localizado' if item['status'] == 'localizado' else 'Não localizado'
+                    item['DescricaoEtiqueta'] = descricoes.get(item['hex'], 'Sem descrição')
+                    item['ObservacaoItem'] = item.get('data_leitura', '')
+                    if item.get('codigo_leitor'):
+                        item['ObservacaoItem'] += f" - Leitor: {item['codigo_leitor']}"
             
-            # Processar datas
+            # Processar data
             if inventario['dataInventario']:
                 inventario['dataInventario_formatada'] = inventario['dataInventario'].strftime('%d/%m/%Y %H:%M')
             
-            for item in itens:
-                if item['dataLocalizacao']:
-                    item['dataLocalizacao_formatada'] = item['dataLocalizacao'].strftime('%d/%m/%Y %H:%M')
-            
             # Estatísticas
-            total_itens = len(itens)
-            itens_localizados = sum(1 for item in itens if item['Status'] == 'Localizado')
+            percentual = round((inventario['itens_localizados'] / inventario['total_itens'] * 100) 
+                             if inventario['total_itens'] > 0 else 0, 2)
             
             return {
                 'success': True,
                 'inventario': inventario,
                 'itens': itens,
                 'estatisticas': {
-                    'total_itens': total_itens,
-                    'itens_localizados': itens_localizados,
-                    'itens_nao_localizados': total_itens - itens_localizados,
-                    'percentual_localizado': round((itens_localizados / total_itens * 100) if total_itens > 0 else 0, 2)
+                    'total_itens': inventario['total_itens'],
+                    'itens_localizados': inventario['itens_localizados'],
+                    'itens_nao_localizados': inventario['total_itens'] - inventario['itens_localizados'],
+                    'percentual_localizado': percentual
                 }
             }
             
@@ -597,7 +599,7 @@ class GerenciadorInventariosRFID:
             check_query = """
                 SELECT Status
                 FROM inventariosRFID
-                WHERE idInventarioRFID = %s
+                WHERE id = %s
             """
             
             cursor.execute(check_query, (id_inventario,))
@@ -619,7 +621,7 @@ class GerenciadorInventariosRFID:
             update_query = """
                 UPDATE inventariosRFID
                 SET Status = %s
-                WHERE idInventarioRFID = %s
+                WHERE id = %s
             """
             
             cursor.execute(update_query, ('Finalizado', id_inventario))
