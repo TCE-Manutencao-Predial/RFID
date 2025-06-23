@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Inventários RFID - Sistema de monitoramento</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <!-- CSS Base -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/base.css') }}" />
+
+    <!-- Font Awesome para ícones -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+
+    <!-- CSS Específico (reutilizando etiquetas.css) -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/etiquetas.css') }}" />
+  </head>
+  <body class="rfid-custom-layout">
+    <!-- Container de Toast -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <!-- Header Customizado -->
+    <div class="rfid-custom-header">
+      <nav class="rfid-custom-nav">
+        <h1 class="rfid-system-title">
+          <i class="fas fa-boxes"></i>
+          Inventários RFID
+        </h1>
+
+        <div class="rfid-nav-buttons">
+          <button class="rfid-nav-btn" onclick="navegarPara('etiquetas')">
+            <i class="fas fa-tags"></i>
+            <span>Etiquetas</span>
+          </button>
+          <button class="rfid-nav-btn active" onclick="navegarPara('inventarios')">
+            <i class="fas fa-boxes"></i>
+            <span>Inventários</span>
+          </button>
+          <button class="rfid-nav-btn" onclick="navegarPara('leitores')">
+            <i class="fas fa-satellite-dish"></i>
+            <span>Leitores</span>
+          </button>
+          <button class="rfid-nav-btn" onclick="navegarPara('emprestimos')">
+            <i class="fas fa-hand-holding"></i>
+            <span>Empréstimos</span>
+          </button>
+        </div>
+      </nav>
+    </div>
+
+    <main>
+      <!-- Estatísticas -->
+      <div class="rfid-stats">
+        <div class="rfid-stat-card">
+          <i class="fas fa-clipboard-list rfid-stat-icon" style="color: var(--rfid-primary)"></i>
+          <h2 class="rfid-stat-value" id="totalInventarios">0</h2>
+          <p class="rfid-stat-label">Total de Inventários</p>
+        </div>
+        <div class="rfid-stat-card">
+          <i class="fas fa-spinner rfid-stat-icon" style="color: var(--rfid-warning)"></i>
+          <h2 class="rfid-stat-value" id="inventariosAndamento">0</h2>
+          <p class="rfid-stat-label">Em Andamento</p>
+        </div>
+        <div class="rfid-stat-card">
+          <i class="fas fa-check-circle rfid-stat-icon" style="color: var(--rfid-success)"></i>
+          <h2 class="rfid-stat-value" id="inventariosFinalizados">0</h2>
+          <p class="rfid-stat-label">Finalizados</p>
+        </div>
+        <div class="rfid-stat-card">
+          <i class="fas fa-percentage rfid-stat-icon" style="color: var(--rfid-info)"></i>
+          <h2 class="rfid-stat-value" id="taxaLocalizacao">0%</h2>
+          <p class="rfid-stat-label">Taxa Média de Localização</p>
+        </div>
+      </div>
+
+      <!-- Controles e Filtros -->
+      <div class="rfid-controls">
+        <div class="rfid-controls-header">
+          <h3 class="rfid-controls-title"><i class="fas fa-filter"></i> Filtros e Controles</h3>
+          <div class="rfid-btn-group">
+            <button class="rfid-btn rfid-btn-success" onclick="abrirModalNovoInventario()">
+              <i class="fas fa-plus"></i> Novo Inventário
+            </button>
+            <button class="rfid-btn rfid-btn-primary" onclick="atualizarDados()">
+              <i class="fas fa-sync-alt"></i> Atualizar
+            </button>
+            <button class="rfid-btn rfid-btn-primary" onclick="downloadTemplateCSV()">
+              <i class="fas fa-file-download"></i> Template CSV
+            </button>
+          </div>
+        </div>
+
+        <div class="rfid-filters">
+          <div class="rfid-filter-group">
+            <label class="rfid-filter-label">
+              <i class="fas fa-toggle-on"></i> Status
+            </label>
+            <select id="filtroStatus" class="rfid-filter-select">
+              <option value="">Todos</option>
+              <option value="Em andamento">Em andamento</option>
+              <option value="Finalizado">Finalizado</option>
+            </select>
+          </div>
+
+          <div class="rfid-filter-group">
+            <label class="rfid-filter-label">
+              <i class="fas fa-user"></i> Colaborador
+            </label>
+            <input type="text" id="filtroColaborador" class="rfid-filter-input" 
+                   placeholder="Nome ou ID do colaborador..." autocomplete="off" />
+          </div>
+
+          <div class="rfid-filter-group">
+            <label class="rfid-filter-label">
+              <i class="fas fa-calendar"></i> Data Início
+            </label>
+            <input type="date" id="filtroDataInicio" class="rfid-filter-input" />
+          </div>
+
+          <div class="rfid-filter-group">
+            <label class="rfid-filter-label">
+              <i class="fas fa-calendar"></i> Data Fim
+            </label>
+            <input type="date" id="filtroDataFim" class="rfid-filter-input" />
+          </div>
+        </div>
+      </div>
+
+      <!-- Tabela -->
+      <div class="rfid-table-container">
+        <div id="loadingState" class="rfid-loading" style="display: none">
+          <i class="fas fa-spinner"></i>
+          <p>Carregando inventários...</p>
+        </div>
+
+        <div id="emptyState" class="rfid-empty" style="display: none">
+          <i class="fas fa-inbox"></i>
+          <h3>Nenhum inventário encontrado</h3>
+          <p>Tente ajustar os filtros ou crie um novo inventário</p>
+        </div>
+
+        <table class="rfid-table" id="tabelaInventarios" style="display: none">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Data</th>
+              <th>Colaborador</th>
+              <th>Progresso</th>
+              <th>Status</th>
+              <th>Ações</th>
+            </tr>
+          </thead>
+          <tbody id="tabelaCorpo">
+            <!-- Registros serão inseridos via JavaScript -->
+          </tbody>
+        </table>
+
+        <div class="rfid-pagination" id="paginacao" style="display: none">
+          <div class="rfid-pagination-info">
+            Mostrando <span id="registroInicio">0</span> a <span id="registroFim">0</span> 
+            de <span id="registroTotal">0</span> registros
+          </div>
+          <div class="rfid-pagination-controls" id="paginacaoControles">
+            <!-- Controles de paginação serão inseridos via JavaScript -->
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- Modal de Novo Inventário -->
+    <div class="modal-overlay" id="modalInventario">
+      <div class="modal">
+        <div class="modal-header">
+          <h3 class="modal-title">
+            <i class="fas fa-clipboard-list"></i>
+            <span>Novo Inventário</span>
+          </h3>
+          <button class="modal-close" onclick="fecharModal('modalInventario')">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+        <form id="formInventario" onsubmit="criarInventario(event)">
+          <div class="modal-body">
+            <div class="form-group">
+              <label class="form-label">
+                Colaborador Responsável <span class="required">*</span>
+              </label>
+              <div class="search-container">
+                <input type="text" id="buscaColaboradorInventario" class="form-input" 
+                       placeholder="Digite o nome do colaborador..." autocomplete="off" />
+                <input type="hidden" id="inventarioColaborador" required />
+                <div id="sugestoesColaboradorInventario" class="suggestions-dropdown"></div>
+              </div>
+              <div id="colaboradorSelecionadoInfo" class="selected-info" style="display: none;">
+                <!-- Info do colaborador selecionado será inserida aqui -->
+              </div>
+              <div class="form-hint">Busque e selecione o colaborador responsável pelo inventário</div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">
+                Observações
+              </label>
+              <textarea id="inventarioObservacao" class="form-textarea" 
+                        placeholder="Observações sobre o inventário..."></textarea>
+            </div>
+
+            <div class="rfid-empty" style="background: #e8f4fd; padding: 15px; border-radius: 8px;">
+              <i class="fas fa-info-circle" style="color: var(--rfid-info)"></i>
+              <p style="margin: 10px 0 0 0; font-size: 0.9rem;">
+                Ao criar o inventário, todas as etiquetas ativas serão listadas e as leituras 
+                dos últimos 6 meses serão processadas automaticamente.
+              </p>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="rfid-btn btn-cancel" onclick="fecharModal('modalInventario')">
+              Cancelar
+            </button>
+            <button type="submit" class="rfid-btn rfid-btn-primary" id="btnCriarInventario">
+              <i class="fas fa-plus"></i> Criar Inventário
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Modal de Upload CSV -->
+    <div class="modal-overlay" id="modalUploadCSV">
+      <div class="modal">
+        <div class="modal-header">
+          <h3 class="modal-title">
+            <i class="fas fa-file-upload"></i>
+            <span>Importar Leituras CSV</span>
+          </h3>
+          <button class="modal-close" onclick="fecharModal('modalUploadCSV')">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+        <form id="formUploadCSV" onsubmit="processarCSV(event)">
+          <div class="modal-body">
+            <input type="hidden" id="csvInventarioId" value="" />
+            
+            <div class="form-group">
+              <label class="form-label">
+                Arquivo CSV <span class="required">*</span>
+              </label>
+              <div class="photo-upload-area" onclick="document.getElementById('arquivoCSV').click()">
+                <i class="fas fa-file-csv photo-upload-icon"></i>
+                <p>Clique para selecionar ou arraste o arquivo CSV aqui</p>
+                <p class="form-hint">O arquivo deve conter uma coluna "EPC" com os códigos das etiquetas</p>
+                <input type="file" id="arquivoCSV" accept=".csv" style="display: none" 
+                       onchange="validarArquivoCSV(this)" required />
+                <div id="csvInfo" style="display: none; margin-top: 15px;">
+                  <i class="fas fa-check-circle" style="color: var(--rfid-success)"></i>
+                  <span id="csvFileName"></span>
+                </div>
+              </div>
+            </div>
+
+            <div class="rfid-empty" style="background: #fff3cd; padding: 15px; border-radius: 8px;">
+              <i class="fas fa-exclamation-triangle" style="color: var(--rfid-warning)"></i>
+              <p style="margin: 10px 0 0 0; font-size: 0.9rem;">
+                Formato esperado: arquivo CSV com coluna "EPC" contendo os códigos hexadecimais das etiquetas lidas.
+              </p>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="rfid-btn btn-cancel" onclick="fecharModal('modalUploadCSV')">
+              Cancelar
+            </button>
+            <button type="submit" class="rfid-btn rfid-btn-primary" id="btnProcessarCSV">
+              <i class="fas fa-upload"></i> Processar CSV
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Modal de Detalhes do Inventário -->
+    <div class="modal-overlay" id="modalDetalhes">
+      <div class="modal" style="max-width: 900px;">
+        <div class="modal-header">
+          <h3 class="modal-title">
+            <i class="fas fa-clipboard-check"></i>
+            <span>Detalhes do Inventário #<span id="detalheInventarioId"></span></span>
+          </h3>
+          <button class="modal-close" onclick="fecharModal('modalDetalhes')">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+        <div class="modal-body">
+          <!-- Informações do Inventário -->
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px;">
+            <div>
+              <strong>Data:</strong> <span id="detalheData"></span>
+            </div>
+            <div>
+              <strong>Colaborador:</strong> <span id="detalheColaborador"></span>
+            </div>
+            <div>
+              <strong>Status:</strong> <span id="detalheStatus"></span>
+            </div>
+            <div>
+              <strong>Progresso:</strong> <span id="detalheProgresso"></span>
+            </div>
+          </div>
+
+          <div style="margin-bottom: 20px;">
+            <strong>Observações:</strong>
+            <p id="detalheObservacoes" style="margin: 5px 0; color: #6c757d;"></p>
+          </div>
+
+          <!-- Filtros dos itens -->
+          <div class="rfid-filters" style="margin-bottom: 20px;">
+            <div class="rfid-filter-group">
+              <label class="rfid-filter-label">
+                <i class="fas fa-check-square"></i> Status
+              </label>
+              <select id="filtroStatusItem" class="rfid-filter-select" onchange="filtrarItensInventario()">
+                <option value="">Todos</option>
+                <option value="Localizado">Localizados</option>
+                <option value="Não localizado">Não localizados</option>
+              </select>
+            </div>
+            <div class="rfid-filter-group">
+              <label class="rfid-filter-label">
+                <i class="fas fa-search"></i> Buscar
+              </label>
+              <input type="text" id="filtroBuscarItem" class="rfid-filter-input" 
+                     placeholder="Etiqueta ou descrição..." onkeyup="filtrarItensInventario()" />
+            </div>
+          </div>
+
+          <!-- Lista de Itens -->
+          <div style="max-height: 400px; overflow-y: auto; border: 1px solid var(--rfid-border); border-radius: 8px;">
+            <table class="rfid-table" style="margin: 0;">
+              <thead style="position: sticky; top: 0; background: white; z-index: 10;">
+                <tr>
+                  <th>Etiqueta</th>
+                  <th>Descrição</th>
+                  <th>Status</th>
+                  <th>Localização</th>
+                </tr>
+              </thead>
+              <tbody id="tabelaItensInventario">
+                <!-- Itens serão inseridos via JavaScript -->
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Estatísticas -->
+          <div style="margin-top: 20px; padding: 15px; background: var(--rfid-light); border-radius: 8px;">
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; text-align: center;">
+              <div>
+                <strong style="color: var(--rfid-primary);">Total</strong>
+                <p style="font-size: 1.5rem; margin: 5px 0;" id="estatTotal">0</p>
+              </div>
+              <div>
+                <strong style="color: var(--rfid-success);">Localizados</strong>
+                <p style="font-size: 1.5rem; margin: 5px 0;" id="estatLocalizados">0</p>
+              </div>
+              <div>
+                <strong style="color: var(--rfid-danger);">Não Localizados</strong>
+                <p style="font-size: 1.5rem; margin: 5px 0;" id="estatNaoLocalizados">0</p>
+              </div>
+              <div>
+                <strong style="color: var(--rfid-info);">Taxa</strong>
+                <p style="font-size: 1.5rem; margin: 5px 0;" id="estatTaxa">0%</p>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="rfid-btn btn-cancel" onclick="fecharModal('modalDetalhes')">
+            Fechar
+          </button>
+          <button type="button" class="rfid-btn rfid-btn-primary" id="btnExportarItens" 
+                  onclick="exportarItensInventario()">
+            <i class="fas fa-file-export"></i> Exportar Lista
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal de Confirmação -->
+    <div class="modal-overlay confirm-modal" id="modalConfirmacao">
+      <div class="modal">
+        <div class="modal-header">
+          <h3 class="modal-title" id="confirmTitulo">
+            <i class="fas fa-exclamation-triangle"></i>
+            Confirmar Ação
+          </h3>
+          <button class="modal-close" onclick="fecharModal('modalConfirmacao')">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+        <div class="modal-body">
+          <div class="confirm-icon">
+            <i class="fas fa-question-circle" id="confirmIcon"></i>
+          </div>
+          <div class="confirm-message" id="confirmMensagem">
+            Tem certeza que deseja realizar esta ação?
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="rfid-btn btn-cancel" onclick="fecharModal('modalConfirmacao')">
+            Cancelar
+          </button>
+          <button type="button" class="rfid-btn" id="btnConfirmar" onclick="">
+            Confirmar
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- JavaScript -->
+    <script src="{{ url_for('static', filename='js/inventarios.js') }}"></script>
+    
+    <!-- Estilos adicionais para busca de colaboradores -->
+    <style>
+      .search-container {
+        position: relative;
+      }
+      
+      .suggestions-dropdown {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        background: white;
+        border: 2px solid var(--rfid-border);
+        border-top: none;
+        border-radius: 0 0 8px 8px;
+        max-height: 200px;
+        overflow-y: auto;
+        z-index: 100;
+        display: none;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+      }
+      
+      .suggestions-dropdown.show {
+        display: block;
+      }
+      
+      .suggestion-item {
+        padding: 12px 15px;
+        cursor: pointer;
+        transition: background 0.2s;
+        border-bottom: 1px solid var(--rfid-border);
+      }
+      
+      .suggestion-item:last-child {
+        border-bottom: none;
+      }
+      
+      .suggestion-item:hover {
+        background: var(--rfid-light);
+      }
+      
+      .suggestion-nome {
+        font-weight: 600;
+        color: var(--rfid-dark);
+      }
+      
+      .suggestion-empresa {
+        font-size: 0.85rem;
+        color: #6c757d;
+        margin-top: 2px;
+      }
+      
+      .no-results {
+        padding: 20px;
+        text-align: center;
+        color: #6c757d;
+        font-style: italic;
+      }
+      
+      .selected-info {
+        margin-top: 10px;
+        padding: 10px 15px;
+        background: var(--rfid-light);
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        color: var(--rfid-success);
+        font-weight: 500;
+      }
+      
+      .selected-info i {
+        font-size: 1.2rem;
+      }
+    </style>
+  </body>
+</html>

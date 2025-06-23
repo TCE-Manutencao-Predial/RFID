@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Sistema de monitoramento RFID</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <!-- CSS Base -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/base.css') }}" />
+
+    <!-- Font Awesome para ícones -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+
+    <!-- CSS Específico -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/etiquetas.css') }}" />
+  </head>
+  <body class="rfid-custom-layout">
+    <!-- Container de Toast -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <!-- MODIFICAÇÃO PARA O HEADER - Substitua o header existente por este: -->
+
+    <!-- Header Customizado -->
+    <div class="rfid-custom-header">
+      <nav class="rfid-custom-nav">
+        <h1 class="rfid-system-title">
+          <i class="fas fa-broadcast-tower"></i>
+          Etiquetas RFID
+        </h1>
+
+        <!-- ADICIONAR BOTÕES DE NAVEGAÇÃO -->
+
+        <div class="rfid-nav-buttons">
+          <button class="rfid-nav-btn active" onclick="navegarPara('etiquetas')">
+            <i class="fas fa-tags"></i>
+            <span>Etiquetas</span>
+          </button>
+          <button class="rfid-nav-btn" onclick="navegarPara('inventarios')">
+            <i class="fas fa-boxes"></i>
+            <span>Inventários</span>
+          </button>
+          <button class="rfid-nav-btn" onclick="navegarPara('leitores')">
+            <i class="fas fa-satellite-dish"></i>
+            <span>Leitores</span>
+          </button>
+          <button class="rfid-nav-btn" onclick="navegarPara('emprestimos')">
+            <i class="fas fa-hand-holding"></i>
+            <span>Empréstimos</span>
+          </button>
+        </div>
+      </nav>
+    </div>
+
+    <main>
+      <!-- Header da Página -->
+      <!-- <div class="rfid-page-header">
+        <h1 class="rfid-page-title">
+          <i class="fas fa-tags"></i>
+          Controle de Etiquetas RFID
+        </h1>
+        <p class="rfid-page-subtitle">Gerenciamento de etiquetas RFID de ferramentas e materiais</p>
+      </div> -->
+
+      <!-- Estatísticas -->
+      <div class="rfid-stats">
+        <div class="rfid-stat-card">
+          <i class="fas fa-tags rfid-stat-icon" style="color: var(--rfid-primary)"></i>
+          <h2 class="rfid-stat-value" id="totalEtiquetas">0</h2>
+          <p class="rfid-stat-label">Total de Etiquetas</p>
+        </div>
+        <div class="rfid-stat-card">
+          <i class="fas fa-check-circle rfid-stat-icon" style="color: var(--rfid-success)"></i>
+          <h2 class="rfid-stat-value" id="etiquetasAtivas">0</h2>
+          <p class="rfid-stat-label">Etiquetas Ativas</p>
+        </div>
+        <div class="rfid-stat-card">
+          <i class="fas fa-times-circle rfid-stat-icon" style="color: var(--rfid-danger)"></i>
+          <h2 class="rfid-stat-value" id="etiquetasDestruidas">0</h2>
+          <p class="rfid-stat-label">Etiquetas Destruídas</p>
+        </div>
+        <div class="rfid-stat-card">
+          <i class="fas fa-percentage rfid-stat-icon" style="color: var(--rfid-info)"></i>
+          <h2 class="rfid-stat-value" id="percentualAtivas">0%</h2>
+          <p class="rfid-stat-label">Taxa de Ativas</p>
+        </div>
+      </div>
+
+      <!-- Controles e Filtros -->
+      <div class="rfid-controls">
+        <div class="rfid-controls-header">
+          <h3 class="rfid-controls-title"><i class="fas fa-filter"></i> Filtros e Controles</h3>
+          <div class="rfid-btn-group">
+            <button class="rfid-btn rfid-btn-success" onclick="abrirModalNovaEtiqueta()"><i class="fas fa-plus"></i> Nova Etiqueta</button>
+            <button class="rfid-btn rfid-btn-primary" onclick="atualizarDados()"><i class="fas fa-sync-alt"></i> Atualizar</button>
+            <button class="rfid-btn rfid-btn-primary" onclick="exportarDados()"><i class="fas fa-file-export"></i> Exportar</button>
+          </div>
+        </div>
+
+        <div class="rfid-filters">
+          <div class="rfid-filter-group">
+            <label class="rfid-filter-label"> <i class="fas fa-barcode"></i> Código da Etiqueta </label>
+            <input type="text" id="filtroEtiqueta" class="rfid-filter-input" placeholder="Digite o código hex..." autocomplete="off" />
+          </div>
+
+          <div class="rfid-filter-group">
+            <label class="rfid-filter-label"> <i class="fas fa-search"></i> Descrição </label>
+            <input type="text" id="filtroDescricao" class="rfid-filter-input" placeholder="Digite a descrição..." autocomplete="off" />
+          </div>
+
+          <div class="rfid-filter-group">
+            <label class="rfid-filter-label"> <i class="fas fa-check-square"></i> Status </label>
+            <select id="filtroStatus" class="rfid-filter-select">
+              <option value="">Todos</option>
+              <option value="0">Ativas</option>
+              <option value="1">Destruídas</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tabela -->
+      <div class="rfid-table-container">
+        <div id="loadingState" class="rfid-loading" style="display: none">
+          <i class="fas fa-spinner"></i>
+          <p>Carregando etiquetas...</p>
+        </div>
+
+        <div id="emptyState" class="rfid-empty" style="display: none">
+          <i class="fas fa-inbox"></i>
+          <h3>Nenhuma etiqueta encontrada</h3>
+          <p>Tente ajustar os filtros ou adicione uma nova etiqueta</p>
+        </div>
+
+        <table class="rfid-table" id="tabelaEtiquetas" style="display: none">
+          <thead>
+            <tr>
+              <th>Código RFID</th>
+              <th>Descrição</th>
+              <th>Status</th>
+              <th>Ações</th>
+            </tr>
+          </thead>
+          <tbody id="tabelaCorpo">
+            <!-- Registros serão inseridos via JavaScript -->
+          </tbody>
+        </table>
+
+        <div class="rfid-pagination" id="paginacao" style="display: none">
+          <div class="rfid-pagination-info">
+            Mostrando <span id="registroInicio">0</span> a <span id="registroFim">0</span> de <span id="registroTotal">0</span> registros
+          </div>
+          <div class="rfid-pagination-controls" id="paginacaoControles">
+            <!-- Controles de paginação serão inseridos via JavaScript -->
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- Modal de Nova/Editar Etiqueta -->
+    <div class="modal-overlay" id="modalEtiqueta">
+      <div class="modal">
+        <div class="modal-header">
+          <h3 class="modal-title">
+            <i class="fas fa-tag"></i>
+            <span id="modalTitulo">Nova Etiqueta</span>
+          </h3>
+          <button class="modal-close" onclick="fecharModal('modalEtiqueta')">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+        <form id="formEtiqueta" onsubmit="salvarEtiqueta(event)">
+          <div class="modal-body">
+            <input type="hidden" id="etiquetaId" value="" />
+
+            <div class="form-group">
+              <label class="form-label"> Código RFID <span class="required">*</span> </label>
+              <input type="text" id="etiquetaCodigo" class="form-input" placeholder="Ex: 617061720000000018733" required />
+              <div class="form-hint">Digite o código hexadecimal da etiqueta RFID</div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label"> Descrição </label>
+              <textarea id="etiquetaDescricao" class="form-textarea" placeholder="Digite uma descrição para a etiqueta..."></textarea>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label"> Foto (opcional) </label>
+              <div class="photo-upload-area" onclick="document.getElementById('etiquetaFoto').click()">
+                <i class="fas fa-camera photo-upload-icon"></i>
+                <p>Clique para adicionar uma foto ou arraste aqui</p>
+                <p class="form-hint">Formatos aceitos: JPG, PNG, GIF (máx. 5MB)</p>
+                <input type="file" id="etiquetaFoto" accept="image/*" style="display: none" onchange="previewFoto(this)" />
+                <img id="fotoPreview" class="photo-preview" style="display: none" />
+              </div>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="rfid-btn btn-cancel" onclick="fecharModal('modalEtiqueta')">Cancelar</button>
+            <button type="submit" class="rfid-btn rfid-btn-primary" id="btnSalvarEtiqueta"><i class="fas fa-save"></i> Salvar</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Modal de Confirmação -->
+    <div class="modal-overlay confirm-modal" id="modalConfirmacao">
+      <div class="modal">
+        <div class="modal-header">
+          <h3 class="modal-title" id="confirmTitulo">
+            <i class="fas fa-exclamation-triangle"></i>
+            Confirmar Ação
+          </h3>
+          <button class="modal-close" onclick="fecharModal('modalConfirmacao')">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+        <div class="modal-body">
+          <div class="confirm-icon">
+            <i class="fas fa-question-circle" id="confirmIcon"></i>
+          </div>
+          <div class="confirm-message" id="confirmMensagem">Tem certeza que deseja realizar esta ação?</div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="rfid-btn btn-cancel" onclick="fecharModal('modalConfirmacao')">Cancelar</button>
+          <button type="button" class="rfid-btn" id="btnConfirmar" onclick="">Confirmar</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- JavaScript -->
+    <script src="{{ url_for('static', filename='js/etiquetas.js') }}"></script>
+  </body>
+</html>

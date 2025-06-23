@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 from ..config import MYSQL_CONFIG
 import json
 import hashlib
+import base64
 
 class GerenciadorEtiquetasRFID:
     """Gerenciador para operações com etiquetas RFID no MySQL com sistema de cache."""
@@ -81,6 +82,94 @@ class GerenciadorEtiquetasRFID:
             self.logger.error(f"Erro ao conectar ao MySQL: {e}")
             raise
     
+    def criar_etiqueta(self, dados):
+        """
+        Cria uma nova etiqueta RFID.
+        
+        Args:
+            dados (dict): Dados da etiqueta (EtiquetaRFID_hex, Descricao, Foto[opcional])
+            
+        Returns:
+            dict: Resultado da operação com ID da nova etiqueta
+        """
+        connection = None
+        cursor = None
+        
+        try:
+            # Validar dados obrigatórios
+            if not dados.get('EtiquetaRFID_hex'):
+                return {
+                    'success': False,
+                    'error': 'Código da etiqueta (EtiquetaRFID_hex) é obrigatório'
+                }
+            
+            connection = self._get_connection()
+            cursor = connection.cursor()
+            
+            # Verificar se a etiqueta já existe
+            check_query = "SELECT COUNT(*) FROM etiquetasRFID WHERE EtiquetaRFID_hex = %s"
+            cursor.execute(check_query, (dados['EtiquetaRFID_hex'],))
+            
+            if cursor.fetchone()[0] > 0:
+                return {
+                    'success': False,
+                    'error': 'Etiqueta com este código já existe'
+                }
+            
+            # Preparar campos e valores
+            campos = ['EtiquetaRFID_hex']
+            valores = [dados['EtiquetaRFID_hex']]
+            placeholders = ['%s']
+            
+            if dados.get('Descricao'):
+                campos.append('Descricao')
+                valores.append(dados['Descricao'])
+                placeholders.append('%s')
+            
+            if dados.get('Foto'):
+                campos.append('Foto')
+                # Se a foto vier como base64, decodificar
+                if isinstance(dados['Foto'], str):
+                    try:
+                        foto_bytes = base64.b64decode(dados['Foto'])
+                        valores.append(foto_bytes)
+                    except Exception as e:
+                        self.logger.error(f"Erro ao decodificar foto base64: {e}")
+                        valores.append(dados['Foto'])
+                else:
+                    valores.append(dados['Foto'])
+                placeholders.append('%s')
+            
+            # Construir e executar query
+            insert_query = f"""
+                INSERT INTO etiquetasRFID ({', '.join(campos)})
+                VALUES ({', '.join(placeholders)})
+            """
+            
+            cursor.execute(insert_query, valores)
+            id_etiqueta = cursor.lastrowid
+            
+            # Limpar cache após inserção
+            self.limpar_cache()
+            
+            return {
+                'success': True,
+                'message': 'Etiqueta criada com sucesso',
+                'id_etiqueta': id_etiqueta
+            }
+            
+        except Error as e:
+            self.logger.error(f"Erro ao criar etiqueta: {e}")
+            return {
+                'success': False,
+                'error': str(e)
+            }
+        finally:
+            if cursor:
+                cursor.close()
+            if connection:
+                connection.close()
+    
     def obter_etiquetas(self, filtros=None, limite=100, offset=0, force_refresh=False):
         """
         Obtém lista de etiquetas com filtros opcionais.
@@ -103,9 +192,11 @@ class GerenciadorEtiquetasRFID:
         cache_key = self._get_cache_key('etiquetas', cache_params)
         
         # Verificar cache primeiro (a menos que force_refresh seja True)
-        if not force_refresh:
+        # IMPORTANTE: Não usar cache quando há filtro de status para evitar inconsistências
+        if not force_refresh and not (filtros and 'destruida' in filtros):
             cached_result = self._get_from_cache(cache_key)
             if cached_result:
+                cached_result['from_cache'] = True
                 return cached_result
         
         total = 0
@@ -126,8 +217,11 @@ class GerenciadorEtiquetasRFID:
                     params.append(f"%{filtros['descricao']}%")
                 
                 if filtros.get('destruida') is not None:
-                    where_conditions.append("Destruida = %s")
-                    params.append(filtros['destruida'])
+                    # Filtrar por status baseado no campo de data
+                    if filtros['destruida'] == 0:  # Ativas
+                        where_conditions.append("Destruida IS NULL")
+                    elif filtros['destruida'] == 1:  # Destruídas
+                        where_conditions.append("Destruida IS NOT NULL")
             
             where_clause = " AND ".join(where_conditions) if where_conditions else "1=1"
             
@@ -248,6 +342,18 @@ class GerenciadorEtiquetasRFID:
             cursor.execute(query, (id_etiqueta,))
             etiqueta = cursor.fetchone()
             
+            # Se tem foto, converter para base64 para facilitar o transporte
+            if etiqueta and etiqueta.get('Foto'):
+                try:
+                    etiqueta['Foto'] = base64.b64encode(etiqueta['Foto']).decode('utf-8')
+                    etiqueta['tem_foto'] = True
+                except Exception as e:
+                    self.logger.error(f"Erro ao codificar foto: {e}")
+                    etiqueta['tem_foto'] = False
+                    etiqueta['Foto'] = None
+            elif etiqueta:
+                etiqueta['tem_foto'] = False
+            
             # Armazenar no cache se encontrado
             if etiqueta:
                 self._set_cache(cache_key, etiqueta)
@@ -269,7 +375,7 @@ class GerenciadorEtiquetasRFID:
         
         Args:
             id_etiqueta (int): ID da etiqueta
-            dados (dict): Dados para atualizar
+            dados (dict): Dados para atualizar (EtiquetaRFID_hex, Descricao, Destruida, Foto)
             
         Returns:
             dict: Resultado da operação
@@ -285,13 +391,60 @@ class GerenciadorEtiquetasRFID:
             campos = []
             valores = []
             
-            if 'descricao' in dados:
-                campos.append("Descricao = %s")
-                valores.append(dados['descricao'])
+            # Atualizar código da etiqueta
+            if 'EtiquetaRFID_hex' in dados:
+                # Verificar se o novo código já existe
+                check_query = """
+                    SELECT COUNT(*) FROM etiquetasRFID 
+                    WHERE EtiquetaRFID_hex = %s AND id_listaEtiquetasRFID != %s
+                """
+                cursor.execute(check_query, (dados['EtiquetaRFID_hex'], id_etiqueta))
+                
+                if cursor.fetchone()[0] > 0:
+                    return {
+                        'success': False,
+                        'error': 'Já existe outra etiqueta com este código'
+                    }
+                
+                campos.append("EtiquetaRFID_hex = %s")
+                valores.append(dados['EtiquetaRFID_hex'])
             
-            if 'destruida' in dados:
-                campos.append("Destruida = %s")
-                valores.append(dados['destruida'])
+            # Atualizar descrição
+            if 'descricao' in dados or 'Descricao' in dados:
+                campos.append("Descricao = %s")
+                valores.append(dados.get('descricao') or dados.get('Descricao'))
+            
+            # Atualizar status (destruída)
+            if 'destruida' in dados or 'Destruida' in dados:
+                valor_destruida = dados.get('destruida', dados.get('Destruida'))
+                
+                if valor_destruida in [True, 1, '1', 'true']:
+                    # Marcar como destruída com a data/hora atual
+                    campos.append("Destruida = %s")
+                    valores.append(datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
+                elif valor_destruida in [False, 0, '0', 'false', None]:
+                    # Marcar como ativa (NULL)
+                    campos.append("Destruida = %s")
+                    valores.append(None)
+            
+            # Atualizar foto
+            if 'Foto' in dados or 'foto' in dados:
+                campos.append("Foto = %s")
+                foto_data = dados.get('Foto') or dados.get('foto')
+                
+                if foto_data:
+                    # Se a foto vier como base64, decodificar
+                    if isinstance(foto_data, str):
+                        try:
+                            foto_bytes = base64.b64decode(foto_data)
+                            valores.append(foto_bytes)
+                        except Exception as e:
+                            self.logger.error(f"Erro ao decodificar foto base64: {e}")
+                            valores.append(foto_data)
+                    else:
+                        valores.append(foto_data)
+                else:
+                    valores.append(None)
             
             if not campos:
                 return {
@@ -303,6 +456,12 @@ class GerenciadorEtiquetasRFID:
             valores.append(id_etiqueta)
             
             cursor.execute(query, valores)
+            
+            if cursor.rowcount == 0:
+                return {
+                    'success': False,
+                    'error': 'Etiqueta não encontrada'
+                }
             
             # Limpar cache após atualização
             self.limpar_cache()
@@ -324,6 +483,33 @@ class GerenciadorEtiquetasRFID:
                 cursor.close()
             if connection:
                 connection.close()
+    
+    def destruir_etiqueta(self, id_etiqueta):
+        """
+        Marca uma etiqueta como destruída (soft delete).
+        Nunca remove fisicamente do banco de dados.
+        
+        Args:
+            id_etiqueta (int): ID da etiqueta
+            
+        Returns:
+            dict: Resultado da operação
+        """
+        # Sempre fazer soft delete - marcar como destruída com data/hora atual
+        return self.atualizar_etiqueta(id_etiqueta, {'destruida': True})
+    
+    def restaurar_etiqueta(self, id_etiqueta):
+        """
+        Restaura uma etiqueta destruída (remove a data de destruição).
+        
+        Args:
+            id_etiqueta (int): ID da etiqueta
+            
+        Returns:
+            dict: Resultado da operação
+        """
+        # Limpar o campo Destruida (definir como NULL)
+        return self.atualizar_etiqueta(id_etiqueta, {'destruida': False})
     
     def obter_estatisticas(self, force_refresh=False):
         """
@@ -372,7 +558,7 @@ class GerenciadorEtiquetasRFID:
                 connection2 = self._get_connection()
                 cursor2 = connection2.cursor(dictionary=True)
                 
-                cursor2.execute("SELECT COUNT(*) as destruidas FROM etiquetasRFID WHERE Destruida = 1")
+                cursor2.execute("SELECT COUNT(*) as destruidas FROM etiquetasRFID WHERE Destruida IS NOT NULL")
                 result = cursor2.fetchone()
                 destruidas = result['destruidas'] if result and 'destruidas' in result else 0
                 
