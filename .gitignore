@@ -1,0 +1,6 @@
+app/__pycache__/__init__.cpython-311.pyc
+app/__pycache__/config.cpython-311.pyc
+app/routes/__pycache__/api_etiquetas.cpython-311.pyc
+app/utils/__pycache__/GerenciadorEtiquetasRFID.cpython-311.pyc
+app/routes/__pycache__/web.cpython-311.pyc
+app/logs/rfid.log
