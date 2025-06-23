@@ -39,6 +39,9 @@ class GerenciadorInventariosRFID:
         self.gerenciador_etiquetas = GerenciadorEtiquetasRFID.get_instance()
         self.gerenciador_leitores = GerenciadorLeitoresRFID.get_instance()
         
+        # Verificar e corrigir AUTO_INCREMENT se necessário
+        self.verificar_auto_increment()
+        
         self.logger.info("Gerenciador de Inventários RFID inicializado")
     
     def _get_cache_key(self, prefix, params=None):
@@ -87,6 +90,42 @@ class GerenciadorInventariosRFID:
             self.logger.error(f"Erro ao conectar ao MySQL: {e}")
             raise
     
+    def verificar_auto_increment(self):
+        """
+        Verifica e corrige o AUTO_INCREMENT da tabela inventariosRFID se necessário.
+        """
+        connection = None
+        cursor = None
+        
+        try:
+            connection = self._get_connection()
+            cursor = connection.cursor()
+            
+            # Obter o maior ID atual
+            cursor.execute("SELECT MAX(idInventarioRFID) FROM inventariosRFID")
+            max_id = cursor.fetchone()[0]
+            
+            if max_id is not None:
+                # Definir AUTO_INCREMENT para o próximo valor
+                next_id = max_id + 1
+                cursor.execute(f"ALTER TABLE inventariosRFID AUTO_INCREMENT = {next_id}")
+                self.logger.info(f"AUTO_INCREMENT ajustado para {next_id}")
+            else:
+                # Se não há registros, garantir que comece do 1
+                cursor.execute("ALTER TABLE inventariosRFID AUTO_INCREMENT = 1")
+                self.logger.info("AUTO_INCREMENT resetado para 1")
+                
+            return True
+            
+        except Error as e:
+            self.logger.error(f"Erro ao verificar AUTO_INCREMENT: {e}")
+            return False
+        finally:
+            if cursor:
+                cursor.close()
+            if connection:
+                connection.close()
+    
     def criar_inventario(self, dados):
         """
         Cria um novo inventário.
@@ -118,7 +157,7 @@ class GerenciadorInventariosRFID:
             dataInventario = dados.get('dataInventario', datetime.now())
             observacao = dados.get('Observacao', '')
             
-            # Inserir inventário
+            # Inserir inventário - NÃO incluir o ID pois deve ser AUTO_INCREMENT
             insert_query = """
                 INSERT INTO inventariosRFID 
                 (dataInventario, id_colaborador, Observacao, Status)
@@ -132,7 +171,19 @@ class GerenciadorInventariosRFID:
                 'Em andamento'
             ))
             
+            # Obter o ID gerado
             id_inventario = cursor.lastrowid
+            
+            if not id_inventario or id_inventario == 0:
+                # Se não obteve o ID, buscar manualmente
+                cursor.execute("SELECT LAST_INSERT_ID()")
+                result = cursor.fetchone()
+                id_inventario = result[0] if result else None
+                
+                if not id_inventario:
+                    raise Exception("Não foi possível obter o ID do inventário criado")
+            
+            self.logger.info(f"Inventário criado com ID: {id_inventario}")
             
             # Obter todas as etiquetas ativas
             etiquetas_result = self.gerenciador_etiquetas.obter_etiquetas(
@@ -142,13 +193,13 @@ class GerenciadorInventariosRFID:
             
             if etiquetas_result['success']:
                 # Inserir todas as etiquetas como não localizadas inicialmente
+                insert_item_query = """
+                    INSERT INTO inventarioitensRFID 
+                    (idInventarioRFID, EtiquetaRFID_hex, Status, CodigoLeitor, Observacao)
+                    VALUES (%s, %s, %s, %s, %s)
+                """
+                
                 for etiqueta in etiquetas_result['etiquetas']:
-                    insert_item_query = """
-                        INSERT INTO inventariosRFID 
-                        (idInventarioRFID, EtiquetaRFID_hex, Status, CodigoLeitor, Observacao)
-                        VALUES (%s, %s, %s, %s, %s)
-                    """
-                    
                     cursor.execute(insert_item_query, (
                         id_inventario,
                         etiqueta['EtiquetaRFID_hex'],
@@ -156,6 +207,8 @@ class GerenciadorInventariosRFID:
                         None,
                         None
                     ))
+                
+                self.logger.info(f"Inseridas {len(etiquetas_result['etiquetas'])} etiquetas no inventário {id_inventario}")
             
             # Processar leituras dos últimos 6 meses
             self._processar_leituras_historicas(id_inventario)
@@ -172,6 +225,12 @@ class GerenciadorInventariosRFID:
             
         except Error as e:
             self.logger.error(f"Erro ao criar inventário: {e}")
+            # Se for erro de duplicate entry, pode ser problema com AUTO_INCREMENT
+            if "Duplicate entry" in str(e):
+                return {
+                    'success': False,
+                    'error': 'Erro ao gerar ID do inventário. Verifique se a tabela está configurada com AUTO_INCREMENT.'
+                }
             return {
                 'success': False,
                 'error': str(e)
@@ -206,7 +265,7 @@ class GerenciadorInventariosRFID:
                     l.CodigoLeitor,
                     MAX(l.Horario) as UltimaLeitura
                 FROM leitoresRFID l
-                INNER JOIN inventariosRFID i ON l.EtiquetaRFID_hex = i.EtiquetaRFID_hex
+                INNER JOIN inventarioitensRFID i ON l.EtiquetaRFID_hex = i.EtiquetaRFID_hex
                 WHERE i.idInventarioRFID = %s 
                     AND l.Horario >= %s
                     AND l.RSSI != 0
@@ -219,7 +278,7 @@ class GerenciadorInventariosRFID:
             # Atualizar status dos itens encontrados
             for leitura in leituras:
                 update_query = """
-                    UPDATE inventariosRFID
+                    UPDATE inventarioitensRFID
                     SET Status = %s,
                         CodigoLeitor = %s,
                         Observacao = %s,
@@ -302,7 +361,7 @@ class GerenciadorInventariosRFID:
                 # Verificar se a etiqueta existe no inventário
                 check_query = """
                     SELECT Status
-                    FROM inventariosRFID
+                    FROM inventarioitensRFID
                     WHERE idInventarioRFID = %s AND EtiquetaRFID_hex = %s
                 """
                 
@@ -316,7 +375,7 @@ class GerenciadorInventariosRFID:
                 # Atualizar apenas se ainda não foi localizado
                 if result[0] == 'Não localizado':
                     update_query = """
-                        UPDATE inventariosRFID
+                        UPDATE inventarioitensRFID
                         SET Status = %s,
                             CodigoLeitor = %s,
                             Observacao = %s,
@@ -404,7 +463,7 @@ class GerenciadorInventariosRFID:
                     COUNT(DISTINCT ii.EtiquetaRFID_hex) as total_itens,
                     SUM(CASE WHEN ii.Status = 'Localizado' THEN 1 ELSE 0 END) as itens_localizados
                 FROM inventariosRFID i
-                LEFT JOIN inventariosRFID ii ON i.idInventarioRFID = ii.idInventarioRFID
+                LEFT JOIN inventarioitensRFID ii ON i.idInventarioRFID = ii.idInventarioRFID
                 WHERE 1=1
             """
             
@@ -531,7 +590,7 @@ class GerenciadorInventariosRFID:
                     ii.Observacao as ObservacaoItem,
                     ii.dataInventario as dataLocalizacao,
                     e.Descricao as DescricaoEtiqueta
-                FROM inventariosRFID ii
+                FROM inventarioitensRFID ii
                 LEFT JOIN etiquetasRFID e ON ii.EtiquetaRFID_hex = e.EtiquetaRFID_hex
                 WHERE ii.idInventarioRFID = %s
                 ORDER BY ii.Status DESC, e.Descricao
