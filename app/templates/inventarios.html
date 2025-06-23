@@ -103,14 +103,6 @@
 
           <div class="rfid-filter-group">
             <label class="rfid-filter-label">
-              <i class="fas fa-user"></i> Colaborador
-            </label>
-            <input type="text" id="filtroColaborador" class="rfid-filter-input" 
-                   placeholder="Nome ou ID do colaborador..." autocomplete="off" />
-          </div>
-
-          <div class="rfid-filter-group">
-            <label class="rfid-filter-label">
               <i class="fas fa-calendar"></i> Data Início
             </label>
             <input type="date" id="filtroDataInicio" class="rfid-filter-input" />
@@ -143,7 +135,6 @@
             <tr>
               <th>ID</th>
               <th>Data</th>
-              <th>Colaborador</th>
               <th>Progresso</th>
               <th>Status</th>
               <th>Ações</th>
@@ -293,9 +284,6 @@
           <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px;">
             <div>
               <strong>Data:</strong> <span id="detalheData"></span>
-            </div>
-            <div>
-              <strong>Colaborador:</strong> <span id="detalheColaborador"></span>
             </div>
             <div>
               <strong>Status:</strong> <span id="detalheStatus"></span>

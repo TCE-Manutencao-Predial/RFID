@@ -40,7 +40,6 @@ document.addEventListener('DOMContentLoaded', function() {
 function configurarEventListeners() {
     // Filtros
     document.getElementById('filtroStatus').addEventListener('change', aplicarFiltros);
-    document.getElementById('filtroColaborador').addEventListener('input', debounce(aplicarFiltros, 500));
     document.getElementById('filtroDataInicio').addEventListener('change', aplicarFiltros);
     document.getElementById('filtroDataFim').addEventListener('change', aplicarFiltros);
     
@@ -219,65 +218,27 @@ async function carregarInventarios() {
         const filtros = obterFiltros();
         const offset = (paginaAtual - 1) * itensPorPagina;
         
-        // Guardar o filtro de colaborador para aplicar no frontend se necessário
-        const filtroColaboradorTexto = document.getElementById('filtroColaborador').value.trim();
-        
         const params = new URLSearchParams({
             limite: itensPorPagina,
             offset: offset
         });
         
-        // Adicionar outros filtros (exceto colaborador texto que será filtrado no frontend)
+        // Adicionar filtros
         if (filtros.status) params.append('status', filtros.status);
         if (filtros.data_inicio) params.append('data_inicio', filtros.data_inicio);
         if (filtros.data_fim) params.append('data_fim', filtros.data_fim);
-        
-        // Se há filtro de colaborador texto, buscar mais registros
-        if (filtroColaboradorTexto && isNaN(filtroColaboradorTexto)) {
-            params.set('limite', itensPorPagina * 5);
-        } else if (filtroColaboradorTexto && !isNaN(filtroColaboradorTexto)) {
-            // Se for número, usar como ID direto
-            params.append('id_colaborador', filtroColaboradorTexto);
-        }
         
         const response = await fetch(`/RFID/api/inventarios?${params}`);
         const data = await response.json();
         
         if (data.success) {
-            let inventariosData = data.inventarios;
-            
-            // Aplicar filtro de colaborador no frontend se necessário
-            if (filtroColaboradorTexto && isNaN(filtroColaboradorTexto)) {
-                const textoBusca = filtroColaboradorTexto.toLowerCase();
-                
-                inventariosData = inventariosData.filter(inv => {
-                    const funcionario = cacheFuncionarios.get(parseInt(inv.id_colaborador));
-                    if (!funcionario) return false;
-                    
-                    const nomeCompleto = `${funcionario.nome} ${funcionario.empresa}`.toLowerCase();
-                    
-                    return funcionario.nome.toLowerCase().includes(textoBusca) || 
-                           funcionario.empresa.toLowerCase().includes(textoBusca) ||
-                           nomeCompleto.includes(textoBusca);
-                });
-                
-                // Ajustar total e aplicar paginação manual
-                const totalFiltrado = inventariosData.length;
-                const inicio = (paginaAtual - 1) * itensPorPagina;
-                inventariosData = inventariosData.slice(inicio, inicio + itensPorPagina);
-                
-                inventarios = inventariosData;
-                renderizarTabela(inventariosData);
-                renderizarPaginacao(totalFiltrado);
-            } else {
-                inventarios = inventariosData;
-                renderizarTabela(inventariosData);
-                renderizarPaginacao(data.total);
-            }
+            inventarios = data.inventarios;
+            renderizarTabela(data.inventarios);
+            renderizarPaginacao(data.total);
             
             // Mostrar/esconder elementos apropriados
-            document.getElementById('tabelaInventarios').style.display = inventariosData.length > 0 ? 'table' : 'none';
-            document.getElementById('emptyState').style.display = inventariosData.length === 0 ? 'block' : 'none';
+            document.getElementById('tabelaInventarios').style.display = data.inventarios.length > 0 ? 'table' : 'none';
+            document.getElementById('emptyState').style.display = data.inventarios.length === 0 ? 'block' : 'none';
             document.getElementById('paginacao').style.display = data.total > itensPorPagina ? 'block' : 'none';
         } else {
             mostrarToast('Erro ao carregar inventários', 'error');
@@ -321,13 +282,9 @@ function renderizarTabela(inventarios) {
         const corBarra = percentual >= 80 ? 'var(--rfid-success)' : 
                         percentual >= 50 ? 'var(--rfid-warning)' : 'var(--rfid-danger)';
         
-        // Obter nome do colaborador
-        const nomeColaborador = obterNomeFuncionario(inventario.id_colaborador);
-        
         tr.innerHTML = `
             <td style="font-weight: 600;">#${inventario.idInventarioRFID}</td>
             <td>${inventario.dataInventario_formatada || '-'}</td>
-            <td title="${nomeColaborador}">${nomeColaborador}</td>
             <td>
                 <div style="display: flex; align-items: center; gap: 10px;">
                     <div style="flex: 1; background: var(--rfid-border); border-radius: 10px; height: 20px; overflow: hidden;">
@@ -551,13 +508,9 @@ async function visualizarInventario(idInventario) {
             inventarioAtual = data.inventario;
             itensInventarioAtual = data.itens;
             
-            // Obter nome do colaborador
-            const nomeColaborador = obterNomeFuncionario(inventarioAtual.id_colaborador);
-            
             // Preencher informações
             document.getElementById('detalheInventarioId').textContent = inventarioAtual.idInventarioRFID;
             document.getElementById('detalheData').textContent = inventarioAtual.dataInventario_formatada || '-';
-            document.getElementById('detalheColaborador').textContent = nomeColaborador;
             document.getElementById('detalheStatus').innerHTML = `
                 <span class="rfid-badge ${inventarioAtual.Status === 'Finalizado' ? 'rfid-badge-active' : 'rfid-badge-destroyed'}">
                     ${inventarioAtual.Status}
@@ -815,8 +768,6 @@ function obterFiltros() {
     
     const status = document.getElementById('filtroStatus').value;
     if (status) filtros.status = status;
-    
-    // Não incluir colaborador texto aqui, será tratado separadamente
     
     const dataInicio = document.getElementById('filtroDataInicio').value;
     if (dataInicio) filtros.data_inicio = dataInicio;
