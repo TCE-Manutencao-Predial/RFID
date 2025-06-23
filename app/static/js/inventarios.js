@@ -9,6 +9,11 @@ let itensInventarioAtual = [];
 let paginaAtual = 1;
 const itensPorPagina = 20;
 
+// Cache de funcionários
+let cacheFuncionarios = new Map();
+let cacheTimestamp = null;
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minutos
+
 // ========================================================================
 // FUNÇÕES DE INICIALIZAÇÃO
 // ========================================================================
@@ -17,9 +22,12 @@ const itensPorPagina = 20;
 document.addEventListener('DOMContentLoaded', function() {
     console.log('Sistema de Inventários RFID inicializado');
     
-    // Carregar dados iniciais
-    carregarInventarios();
-    carregarEstatisticas();
+    // Carregar funcionários primeiro
+    carregarFuncionarios().then(() => {
+        // Carregar dados iniciais após carregar funcionários
+        carregarInventarios();
+        carregarEstatisticas();
+    });
     
     // Configurar event listeners
     configurarEventListeners();
@@ -43,6 +51,135 @@ function configurarEventListeners() {
         uploadArea.addEventListener('dragleave', handleDragLeave);
         uploadArea.addEventListener('drop', handleDrop);
     }
+    
+    // Busca de colaboradores
+    const campoBuscaColaborador = document.getElementById('buscaColaboradorInventario');
+    if (campoBuscaColaborador) {
+        campoBuscaColaborador.addEventListener('input', debounce(buscarColaboradores, 300));
+        campoBuscaColaborador.addEventListener('focus', function() {
+            if (this.value.trim().length >= 2) {
+                buscarColaboradores();
+            }
+        });
+    }
+    
+    // Fechar sugestões ao clicar fora
+    document.addEventListener('click', function(e) {
+        if (!e.target.closest('.search-container')) {
+            const sugestoes = document.getElementById('sugestoesColaboradorInventario');
+            if (sugestoes) sugestoes.classList.remove('show');
+        }
+    });
+}
+
+// ========================================================================
+// FUNÇÕES DE API DE FUNCIONÁRIOS
+// ========================================================================
+
+async function carregarFuncionarios(forceRefresh = false) {
+    // Verificar se o cache ainda é válido
+    if (!forceRefresh && cacheFuncionarios.size > 0 && cacheTimestamp && 
+        (Date.now() - cacheTimestamp < CACHE_DURATION)) {
+        return;
+    }
+
+    try {
+        const response = await fetch('https://automacao.tce.go.gov.br/checklistpredial/api/funcionarios/listar');
+        if (!response.ok) {
+            throw new Error(`Erro HTTP: ${response.status}`);
+        }
+
+        const data = await response.json();
+        if (data.success) {
+            // Limpar cache antigo
+            cacheFuncionarios.clear();
+            
+            // Popular cache com mapeamento ID -> dados do funcionário
+            data.funcionarios.forEach(func => {
+                cacheFuncionarios.set(func.id, {
+                    id: func.id,
+                    nome: func.nome,
+                    empresa: func.empresa
+                });
+            });
+            
+            cacheTimestamp = Date.now();
+            console.log(`Cache de funcionários atualizado: ${cacheFuncionarios.size} registros`);
+        }
+    } catch (error) {
+        console.error("Erro ao carregar funcionários:", error);
+        // Não mostrar toast aqui para não poluir a interface
+    }
+}
+
+function obterNomeFuncionario(idColaborador) {
+    const funcionario = cacheFuncionarios.get(parseInt(idColaborador));
+    if (funcionario) {
+        return `${funcionario.nome} (${funcionario.empresa})`;
+    }
+    return `ID: ${idColaborador}`;
+}
+
+async function buscarColaboradores() {
+    const termo = document.getElementById('buscaColaboradorInventario').value.trim();
+    const sugestoesDiv = document.getElementById('sugestoesColaboradorInventario');
+    
+    if (termo.length < 2) {
+        sugestoesDiv.classList.remove('show');
+        return;
+    }
+    
+    try {
+        const response = await fetch(`https://automacao.tce.go.gov.br/checklistpredial/api/funcionarios/buscar?nome=${encodeURIComponent(termo)}`);
+        const data = await response.json();
+        
+        if (data.success && data.funcionarios.length > 0) {
+            sugestoesDiv.innerHTML = '';
+            
+            // Limitar a 10 sugestões
+            const funcionarios = data.funcionarios.slice(0, 10);
+            
+            funcionarios.forEach(func => {
+                const item = document.createElement('div');
+                item.className = 'suggestion-item';
+                item.innerHTML = `
+                    <div class="suggestion-nome">${func.nome}</div>
+                    <div class="suggestion-empresa">${func.empresa}</div>
+                `;
+                
+                item.addEventListener('click', function() {
+                    selecionarColaborador(func.id, func.nome, func.empresa);
+                });
+                
+                sugestoesDiv.appendChild(item);
+            });
+            
+            sugestoesDiv.classList.add('show');
+        } else {
+            sugestoesDiv.innerHTML = '<div class="no-results">Nenhum colaborador encontrado</div>';
+            sugestoesDiv.classList.add('show');
+        }
+    } catch (error) {
+        console.error('Erro ao buscar colaboradores:', error);
+        sugestoesDiv.classList.remove('show');
+    }
+}
+
+function selecionarColaborador(id, nome, empresa) {
+    // Preencher o campo hidden com o ID
+    document.getElementById('inventarioColaborador').value = id;
+    
+    // Mostrar informações do colaborador selecionado
+    const infoDiv = document.getElementById('colaboradorSelecionadoInfo');
+    infoDiv.innerHTML = `
+        <i class="fas fa-user-check"></i>
+        <span>${nome} - ${empresa}</span>
+    `;
+    infoDiv.style.display = 'block';
+    
+    // Limpar busca e esconder sugestões
+    document.getElementById('buscaColaboradorInventario').value = '';
+    document.getElementById('sugestoesColaboradorInventario').classList.remove('show');
 }
 
 // ========================================================================
@@ -82,23 +219,65 @@ async function carregarInventarios() {
         const filtros = obterFiltros();
         const offset = (paginaAtual - 1) * itensPorPagina;
         
+        // Guardar o filtro de colaborador para aplicar no frontend se necessário
+        const filtroColaboradorTexto = document.getElementById('filtroColaborador').value.trim();
+        
         const params = new URLSearchParams({
             limite: itensPorPagina,
-            offset: offset,
-            ...filtros
+            offset: offset
         });
+        
+        // Adicionar outros filtros (exceto colaborador texto que será filtrado no frontend)
+        if (filtros.status) params.append('status', filtros.status);
+        if (filtros.data_inicio) params.append('data_inicio', filtros.data_inicio);
+        if (filtros.data_fim) params.append('data_fim', filtros.data_fim);
+        
+        // Se há filtro de colaborador texto, buscar mais registros
+        if (filtroColaboradorTexto && isNaN(filtroColaboradorTexto)) {
+            params.set('limite', itensPorPagina * 5);
+        } else if (filtroColaboradorTexto && !isNaN(filtroColaboradorTexto)) {
+            // Se for número, usar como ID direto
+            params.append('id_colaborador', filtroColaboradorTexto);
+        }
         
         const response = await fetch(`/RFID/api/inventarios?${params}`);
         const data = await response.json();
         
         if (data.success) {
-            inventarios = data.inventarios;
-            renderizarTabela(data.inventarios);
-            renderizarPaginacao(data.total);
+            let inventariosData = data.inventarios;
+            
+            // Aplicar filtro de colaborador no frontend se necessário
+            if (filtroColaboradorTexto && isNaN(filtroColaboradorTexto)) {
+                const textoBusca = filtroColaboradorTexto.toLowerCase();
+                
+                inventariosData = inventariosData.filter(inv => {
+                    const funcionario = cacheFuncionarios.get(parseInt(inv.id_colaborador));
+                    if (!funcionario) return false;
+                    
+                    const nomeCompleto = `${funcionario.nome} ${funcionario.empresa}`.toLowerCase();
+                    
+                    return funcionario.nome.toLowerCase().includes(textoBusca) || 
+                           funcionario.empresa.toLowerCase().includes(textoBusca) ||
+                           nomeCompleto.includes(textoBusca);
+                });
+                
+                // Ajustar total e aplicar paginação manual
+                const totalFiltrado = inventariosData.length;
+                const inicio = (paginaAtual - 1) * itensPorPagina;
+                inventariosData = inventariosData.slice(inicio, inicio + itensPorPagina);
+                
+                inventarios = inventariosData;
+                renderizarTabela(inventariosData);
+                renderizarPaginacao(totalFiltrado);
+            } else {
+                inventarios = inventariosData;
+                renderizarTabela(inventariosData);
+                renderizarPaginacao(data.total);
+            }
             
             // Mostrar/esconder elementos apropriados
-            document.getElementById('tabelaInventarios').style.display = data.inventarios.length > 0 ? 'table' : 'none';
-            document.getElementById('emptyState').style.display = data.inventarios.length === 0 ? 'block' : 'none';
+            document.getElementById('tabelaInventarios').style.display = inventariosData.length > 0 ? 'table' : 'none';
+            document.getElementById('emptyState').style.display = inventariosData.length === 0 ? 'block' : 'none';
             document.getElementById('paginacao').style.display = data.total > itensPorPagina ? 'block' : 'none';
         } else {
             mostrarToast('Erro ao carregar inventários', 'error');
@@ -142,10 +321,13 @@ function renderizarTabela(inventarios) {
         const corBarra = percentual >= 80 ? 'var(--rfid-success)' : 
                         percentual >= 50 ? 'var(--rfid-warning)' : 'var(--rfid-danger)';
         
+        // Obter nome do colaborador
+        const nomeColaborador = obterNomeFuncionario(inventario.id_colaborador);
+        
         tr.innerHTML = `
             <td style="font-weight: 600;">#${inventario.idInventarioRFID}</td>
             <td>${inventario.dataInventario_formatada || '-'}</td>
-            <td>${inventario.id_colaborador}</td>
+            <td title="${nomeColaborador}">${nomeColaborador}</td>
             <td>
                 <div style="display: flex; align-items: center; gap: 10px;">
                     <div style="flex: 1; background: var(--rfid-border); border-radius: 10px; height: 20px; overflow: hidden;">
@@ -287,6 +469,8 @@ function criarBotaoPaginacao(texto, habilitado, onClick) {
 function abrirModalNovoInventario() {
     document.getElementById('inventarioColaborador').value = '';
     document.getElementById('inventarioObservacao').value = '';
+    document.getElementById('colaboradorSelecionadoInfo').style.display = 'none';
+    document.getElementById('buscaColaboradorInventario').value = '';
     abrirModal('modalInventario');
 }
 
@@ -367,10 +551,13 @@ async function visualizarInventario(idInventario) {
             inventarioAtual = data.inventario;
             itensInventarioAtual = data.itens;
             
+            // Obter nome do colaborador
+            const nomeColaborador = obterNomeFuncionario(inventarioAtual.id_colaborador);
+            
             // Preencher informações
             document.getElementById('detalheInventarioId').textContent = inventarioAtual.idInventarioRFID;
             document.getElementById('detalheData').textContent = inventarioAtual.dataInventario_formatada || '-';
-            document.getElementById('detalheColaborador').textContent = inventarioAtual.id_colaborador;
+            document.getElementById('detalheColaborador').textContent = nomeColaborador;
             document.getElementById('detalheStatus').innerHTML = `
                 <span class="rfid-badge ${inventarioAtual.Status === 'Finalizado' ? 'rfid-badge-active' : 'rfid-badge-destroyed'}">
                     ${inventarioAtual.Status}
@@ -629,8 +816,7 @@ function obterFiltros() {
     const status = document.getElementById('filtroStatus').value;
     if (status) filtros.status = status;
     
-    const colaborador = document.getElementById('filtroColaborador').value;
-    if (colaborador) filtros.id_colaborador = colaborador;
+    // Não incluir colaborador texto aqui, será tratado separadamente
     
     const dataInicio = document.getElementById('filtroDataInicio').value;
     if (dataInicio) filtros.data_inicio = dataInicio;
@@ -647,8 +833,11 @@ function aplicarFiltros() {
 }
 
 function atualizarDados() {
-    carregarInventarios();
-    carregarEstatisticas();
+    // Atualizar cache de funcionários e depois os dados
+    carregarFuncionarios(true).then(() => {
+        carregarInventarios();
+        carregarEstatisticas();
+    });
 }
 
 function mostrarLoading(mostrar) {

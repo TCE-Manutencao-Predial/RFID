@@ -105,8 +105,8 @@
             <label class="rfid-filter-label">
               <i class="fas fa-user"></i> Colaborador
             </label>
-            <input type="number" id="filtroColaborador" class="rfid-filter-input" 
-                   placeholder="ID do colaborador..." autocomplete="off" />
+            <input type="text" id="filtroColaborador" class="rfid-filter-input" 
+                   placeholder="Nome ou ID do colaborador..." autocomplete="off" />
           </div>
 
           <div class="rfid-filter-group">
@@ -182,11 +182,18 @@
           <div class="modal-body">
             <div class="form-group">
               <label class="form-label">
-                ID do Colaborador <span class="required">*</span>
+                Colaborador Responsável <span class="required">*</span>
               </label>
-              <input type="number" id="inventarioColaborador" class="form-input" 
-                     placeholder="Digite o ID do colaborador..." required />
-              <div class="form-hint">ID do colaborador responsável pelo inventário</div>
+              <div class="search-container">
+                <input type="text" id="buscaColaboradorInventario" class="form-input" 
+                       placeholder="Digite o nome do colaborador..." autocomplete="off" />
+                <input type="hidden" id="inventarioColaborador" required />
+                <div id="sugestoesColaboradorInventario" class="suggestions-dropdown"></div>
+              </div>
+              <div id="colaboradorSelecionadoInfo" class="selected-info" style="display: none;">
+                <!-- Info do colaborador selecionado será inserida aqui -->
+              </div>
+              <div class="form-hint">Busque e selecione o colaborador responsável pelo inventário</div>
             </div>
 
             <div class="form-group">
@@ -408,5 +415,81 @@
 
     <!-- JavaScript -->
     <script src="{{ url_for('static', filename='js/inventarios.js') }}"></script>
+    
+    <!-- Estilos adicionais para busca de colaboradores -->
+    <style>
+      .search-container {
+        position: relative;
+      }
+      
+      .suggestions-dropdown {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        background: white;
+        border: 2px solid var(--rfid-border);
+        border-top: none;
+        border-radius: 0 0 8px 8px;
+        max-height: 200px;
+        overflow-y: auto;
+        z-index: 100;
+        display: none;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+      }
+      
+      .suggestions-dropdown.show {
+        display: block;
+      }
+      
+      .suggestion-item {
+        padding: 12px 15px;
+        cursor: pointer;
+        transition: background 0.2s;
+        border-bottom: 1px solid var(--rfid-border);
+      }
+      
+      .suggestion-item:last-child {
+        border-bottom: none;
+      }
+      
+      .suggestion-item:hover {
+        background: var(--rfid-light);
+      }
+      
+      .suggestion-nome {
+        font-weight: 600;
+        color: var(--rfid-dark);
+      }
+      
+      .suggestion-empresa {
+        font-size: 0.85rem;
+        color: #6c757d;
+        margin-top: 2px;
+      }
+      
+      .no-results {
+        padding: 20px;
+        text-align: center;
+        color: #6c757d;
+        font-style: italic;
+      }
+      
+      .selected-info {
+        margin-top: 10px;
+        padding: 10px 15px;
+        background: var(--rfid-light);
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        color: var(--rfid-success);
+        font-weight: 500;
+      }
+      
+      .selected-info i {
+        font-size: 1.2rem;
+      }
+    </style>
   </body>
 </html>
