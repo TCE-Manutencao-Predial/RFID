@@ -2,7 +2,7 @@
 from flask import Blueprint, jsonify, request, current_app
 import logging
 import traceback
-from datetime import datetime
+from datetime import datetime, timedelta
 import io
 
 api_inventarios_bp = Blueprint('api_inventarios', __name__)

@@ -144,7 +144,7 @@ class GerenciadorInventariosRFID:
                 # Inserir todas as etiquetas como não localizadas inicialmente
                 for etiqueta in etiquetas_result['etiquetas']:
                     insert_item_query = """
-                        INSERT INTO inventarioitensRFID 
+                        INSERT INTO inventariosRFID 
                         (idInventarioRFID, EtiquetaRFID_hex, Status, CodigoLeitor, Observacao)
                         VALUES (%s, %s, %s, %s, %s)
                     """
@@ -206,7 +206,7 @@ class GerenciadorInventariosRFID:
                     l.CodigoLeitor,
                     MAX(l.Horario) as UltimaLeitura
                 FROM leitoresRFID l
-                INNER JOIN inventarioitensRFID i ON l.EtiquetaRFID_hex = i.EtiquetaRFID_hex
+                INNER JOIN inventariosRFID i ON l.EtiquetaRFID_hex = i.EtiquetaRFID_hex
                 WHERE i.idInventarioRFID = %s 
                     AND l.Horario >= %s
                     AND l.RSSI != 0
@@ -219,7 +219,7 @@ class GerenciadorInventariosRFID:
             # Atualizar status dos itens encontrados
             for leitura in leituras:
                 update_query = """
-                    UPDATE inventarioitensRFID
+                    UPDATE inventariosRFID
                     SET Status = %s,
                         CodigoLeitor = %s,
                         Observacao = %s,
@@ -302,7 +302,7 @@ class GerenciadorInventariosRFID:
                 # Verificar se a etiqueta existe no inventário
                 check_query = """
                     SELECT Status
-                    FROM inventarioitensRFID
+                    FROM inventariosRFID
                     WHERE idInventarioRFID = %s AND EtiquetaRFID_hex = %s
                 """
                 
@@ -316,7 +316,7 @@ class GerenciadorInventariosRFID:
                 # Atualizar apenas se ainda não foi localizado
                 if result[0] == 'Não localizado':
                     update_query = """
-                        UPDATE inventarioitensRFID
+                        UPDATE inventariosRFID
                         SET Status = %s,
                             CodigoLeitor = %s,
                             Observacao = %s,
@@ -404,7 +404,7 @@ class GerenciadorInventariosRFID:
                     COUNT(DISTINCT ii.EtiquetaRFID_hex) as total_itens,
                     SUM(CASE WHEN ii.Status = 'Localizado' THEN 1 ELSE 0 END) as itens_localizados
                 FROM inventariosRFID i
-                LEFT JOIN inventarioitensRFID ii ON i.idInventarioRFID = ii.idInventarioRFID
+                LEFT JOIN inventariosRFID ii ON i.idInventarioRFID = ii.idInventarioRFID
                 WHERE 1=1
             """
             
@@ -531,7 +531,7 @@ class GerenciadorInventariosRFID:
                     ii.Observacao as ObservacaoItem,
                     ii.dataInventario as dataLocalizacao,
                     e.Descricao as DescricaoEtiqueta
-                FROM inventarioitensRFID ii
+                FROM inventariosRFID ii
                 LEFT JOIN etiquetasRFID e ON ii.EtiquetaRFID_hex = e.EtiquetaRFID_hex
                 WHERE ii.idInventarioRFID = %s
                 ORDER BY ii.Status DESC, e.Descricao
