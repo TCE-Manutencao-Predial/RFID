@@ -399,7 +399,16 @@ function abrirModal(modalId) {
 
 // Função para fechar modal
 function fecharModal(modalId) {
-    // Verificar se o modal pode ser fechado (opcional: adicionar confirmação se houver dados não salvos)
+    const modal = document.getElementById(modalId);
+    
+    // Remover a verificação de dados não salvos para esta função
+    // A verificação só deve acontecer quando o usuário clica em Cancelar ou no X
+    modal.classList.remove('active');
+    setTimeout(() => modal.style.display = 'none', 300);
+}
+
+// Nova função específica para cancelar modal (com confirmação)
+function cancelarModal(modalId) {
     const modal = document.getElementById(modalId);
     
     if (modalId === 'modalEtiqueta') {
@@ -414,8 +423,7 @@ function fecharModal(modalId) {
         }
     }
     
-    modal.classList.remove('active');
-    setTimeout(() => modal.style.display = 'none', 300);
+    fecharModal(modalId);
 }
 
 // Preview da foto
