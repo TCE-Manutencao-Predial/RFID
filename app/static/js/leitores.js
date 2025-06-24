@@ -263,6 +263,15 @@ function renderizarTabela(leituras) {
     // Usar antena_completa se disponível, senão manter formato antigo
     const antenaDisplay = leitura.antena_completa || `Antena ${leitura.antena}`;
 
+    // Botão de foto - só mostrar se tem foto disponível
+    const botaoFoto = leitura.tem_foto 
+      ? `<button class="rfid-action-btn rfid-action-btn-photo" 
+                onclick="verFotoEtiqueta('${leitura.etiqueta_hex}')"
+                title="Ver foto">
+          <i class="fas fa-camera"></i> Foto
+        </button>`
+      : '';
+
     tr.innerHTML = `
       <td>${leitura.horario_formatado || leitura.horario}</td>
       <td><span class="rfid-etiqueta">${leitura.etiqueta_hex}</span></td>
@@ -277,6 +286,7 @@ function renderizarTabela(leituras) {
                   title="Ver histórico">
             <i class="fas fa-history"></i> Histórico
           </button>
+          ${botaoFoto}
         </div>
       </td>
     `;
@@ -572,6 +582,126 @@ function mostrarErro(mensagem, detalhe = "") {
 
 function exportarDados() {
   showToast("Funcionalidade de exportação será implementada em breve!", "info");
+}
+
+// Função para verificar e exibir foto da etiqueta
+async function verFotoEtiqueta(codigo) {
+  try {
+    // Preencher informações no modal
+    document.getElementById("fotoEtiquetaCodigo").textContent = codigo;
+    document.getElementById("fotoEtiquetaInfo").textContent = "Verificando disponibilidade...";
+    
+    // Mostrar loading
+    const fotoContainer = document.getElementById("fotoContainer");
+    const fotoLoading = document.getElementById("fotoLoading");
+    
+    fotoContainer.innerHTML = '';
+    fotoLoading.style.display = "block";
+    
+    // Abrir modal
+    abrirModal("modalFoto");
+
+    // Primeiro, verificar se a etiqueta tem foto
+    const infoResponse = await fetch(`/RFID/api/leituras/foto/info/${codigo}`);
+    
+    if (!infoResponse.ok) {
+      throw new Error(`Erro HTTP: ${infoResponse.status}`);
+    }
+    
+    const infoData = await infoResponse.json();
+    
+    if (!infoData.success) {
+      throw new Error(infoData.error || "Erro ao verificar foto");
+    }
+    
+    // Atualizar informações da foto
+    document.getElementById("fotoEtiquetaInfo").textContent = 
+      `Total de fotos: ${infoData.total_fotos} | Última foto: ${infoData.ultima_foto ? new Date(infoData.ultima_foto).toLocaleString('pt-BR') : 'N/A'}`;
+    
+    if (!infoData.tem_foto) {
+      fotoLoading.style.display = "none";
+      fotoContainer.innerHTML = `
+        <div class="foto-erro">
+          <i class="fas fa-image"></i>
+          <p>Esta etiqueta não possui foto disponível</p>
+          <small>Nenhuma foto foi encontrada nos registros de leitura desta etiqueta.</small>
+        </div>
+      `;
+      return;
+    }
+    
+    // Carregar a foto
+    const fotoUrl = `/RFID/api/leituras/foto/${codigo}?t=${Date.now()}`; // Cache bust
+    
+    const img = new Image();
+    img.onload = function() {
+      fotoLoading.style.display = "none";
+      fotoContainer.innerHTML = `
+        <img src="${fotoUrl}" alt="Foto da etiqueta ${codigo}" class="foto-etiqueta" />
+        <div class="foto-controls">
+          <button class="rfid-btn rfid-btn-secondary" onclick="downloadFoto('${codigo}')">
+            <i class="fas fa-download"></i> Baixar
+          </button>
+          <button class="rfid-btn rfid-btn-secondary" onclick="abrirFotoNovaAba('${fotoUrl}')">
+            <i class="fas fa-external-link-alt"></i> Nova Aba
+          </button>
+        </div>
+      `;
+    };
+    
+    img.onerror = function() {
+      fotoLoading.style.display = "none";
+      fotoContainer.innerHTML = `
+        <div class="foto-erro">
+          <i class="fas fa-exclamation-triangle"></i>
+          <p>Erro ao carregar a imagem</p>
+          <small>A imagem pode estar corrompida ou em um formato não suportado.</small>
+          <button class="rfid-btn rfid-btn-primary" onclick="verFotoEtiqueta('${codigo}')">
+            <i class="fas fa-redo"></i> Tentar Novamente
+          </button>
+        </div>
+      `;
+    };
+    
+    img.src = fotoUrl;
+    
+  } catch (error) {
+    console.error("Erro ao verificar foto:", error);
+    
+    // Atualizar o modal com erro
+    const fotoLoading = document.getElementById("fotoLoading");
+    const fotoContainer = document.getElementById("fotoContainer");
+    
+    fotoLoading.style.display = "none";
+    fotoContainer.innerHTML = `
+      <div class="foto-erro">
+        <i class="fas fa-exclamation-triangle"></i>
+        <p>Erro ao carregar foto</p>
+        <small>${error.message}</small>
+        <button class="rfid-btn rfid-btn-primary" onclick="verFotoEtiqueta('${codigo}')">
+          <i class="fas fa-redo"></i> Tentar Novamente
+        </button>
+      </div>
+    `;
+    
+    showToast(`Erro ao carregar foto: ${error.message}`, "error");
+  }
+}
+
+// Função para baixar foto
+function downloadFoto(codigo) {
+  const link = document.createElement('a');
+  link.href = `/RFID/api/leituras/foto/${codigo}`;
+  link.download = `etiqueta_${codigo}.jpg`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  showToast("Download iniciado", "success");
+}
+
+// Função para abrir foto em nova aba
+function abrirFotoNovaAba(url) {
+  window.open(url, '_blank');
 }
 
 // Navegação

@@ -215,6 +215,40 @@
       </div>
     </div>
 
+    <!-- Modal de Foto da Etiqueta -->
+    <div class="modal-overlay" id="modalFoto">
+      <div class="modal modal-large">
+        <div class="modal-header">
+          <h3 class="modal-title">
+            <i class="fas fa-camera"></i>
+            Foto da Etiqueta
+          </h3>
+          <button class="modal-close" onclick="fecharModal('modalFoto')">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+        <div class="modal-body">
+          <div class="foto-info">
+            <h4>Código RFID: <span id="fotoEtiquetaCodigo" class="rfid-etiqueta"></span></h4>
+            <p id="fotoEtiquetaInfo">Carregando informações...</p>
+          </div>
+
+          <div class="foto-viewer">
+            <div id="fotoLoading" class="rfid-loading" style="display: none">
+              <i class="fas fa-spinner"></i>
+              <p>Carregando foto...</p>
+            </div>
+            <div id="fotoContainer">
+              <!-- Foto será carregada aqui -->
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="rfid-btn btn-cancel" onclick="fecharModal('modalFoto')">Fechar</button>
+        </div>
+      </div>
+    </div>
+
     <!-- JavaScript -->
     <script src="{{ url_for('static', filename='js/leitores.js') }}"></script>
   </body>

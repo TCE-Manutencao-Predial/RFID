@@ -1,8 +1,9 @@
 # app/routes/api_leitores.py
-from flask import Blueprint, jsonify, request, current_app
+from flask import Blueprint, jsonify, request, current_app, Response
 import logging
 import traceback
 from datetime import datetime, timedelta
+import base64
 
 api_leitores_bp = Blueprint('api_leitores', __name__)
 logger = logging.getLogger('RFID.api_leitores')
@@ -320,6 +321,105 @@ def listar_antenas():
             'success': False,
             'error': str(e)
         }), 500
+
+@api_leitores_bp.route('/leituras/foto/<string:etiqueta_hex>', methods=['GET'])
+def obter_foto_etiqueta(etiqueta_hex):
+    """
+    Obtém a foto mais recente de uma etiqueta específica.
+    
+    Params:
+        - etiqueta_hex: código hexadecimal da etiqueta
+        
+    Returns:
+        - Imagem binária ou JSON com erro
+    """
+    try:
+        gerenciador = current_app.config.get('GERENCIADOR_LEITORES')
+        if not gerenciador:
+            from ..utils.GerenciadorLeitoresRFID import GerenciadorLeitoresRFID
+            gerenciador = GerenciadorLeitoresRFID.get_instance()
+            current_app.config['GERENCIADOR_LEITORES'] = gerenciador
+        
+        logger.info(f"Buscando foto para etiqueta: {etiqueta_hex}")
+        
+        resultado = gerenciador.obter_foto_etiqueta(etiqueta_hex)
+        
+        if not resultado.get('success', False):
+            return jsonify({
+                'success': False,
+                'error': resultado.get('error', 'Erro ao obter foto da etiqueta')
+            }), 404
+        
+        # Se não encontrou foto
+        if not resultado.get('foto'):
+            return jsonify({
+                'success': False,
+                'error': 'Nenhuma foto encontrada para esta etiqueta'
+            }), 404
+        
+        # Retornar a imagem
+        foto_data = resultado['foto']
+        
+        # Detectar tipo de imagem baseado nos primeiros bytes
+        content_type = 'image/jpeg'  # padrão
+        if foto_data.startswith(b'\x89PNG'):
+            content_type = 'image/png'
+        elif foto_data.startswith(b'GIF'):
+            content_type = 'image/gif'
+        elif foto_data.startswith(b'\xff\xd8'):
+            content_type = 'image/jpeg'
+        
+        return Response(
+            foto_data,
+            mimetype=content_type,
+            headers={
+                'Content-Disposition': f'inline; filename="etiqueta_{etiqueta_hex}.jpg"',
+                'Cache-Control': 'public, max-age=3600'  # Cache por 1 hora
+            }
+        )
+    
+    except Exception as e:
+        logger.error(f"Erro ao obter foto da etiqueta {etiqueta_hex}: {str(e)}")
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@api_leitores_bp.route('/leituras/foto/info/<string:etiqueta_hex>', methods=['GET'])
+def verificar_foto_etiqueta(etiqueta_hex):
+    """
+    Verifica se uma etiqueta possui foto disponível.
+    
+    Params:
+        - etiqueta_hex: código hexadecimal da etiqueta
+        
+    Returns:
+        - JSON com informações sobre disponibilidade da foto
+    """
+    try:
+        gerenciador = current_app.config.get('GERENCIADOR_LEITORES')
+        if not gerenciador:
+            from ..utils.GerenciadorLeitoresRFID import GerenciadorLeitoresRFID
+            gerenciador = GerenciadorLeitoresRFID.get_instance()
+            current_app.config['GERENCIADOR_LEITORES'] = gerenciador
+        
+        resultado = gerenciador.verificar_foto_etiqueta(etiqueta_hex)
+        
+        if not resultado.get('success', False):
+            return jsonify({
+                'success': False,
+                'error': resultado.get('error', 'Erro ao verificar foto da etiqueta')
+            }), 500
+        
+        return jsonify(resultado)
+    
+    except Exception as e:
+        logger.error(f"Erro ao verificar foto da etiqueta {etiqueta_hex}: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
         
 # Rota de teste/debug
 @api_leitores_bp.route('/leituras/test', methods=['GET'])
@@ -336,7 +436,9 @@ def test_api_leitores():
                 '/leituras/estatisticas',
                 '/leituras/etiqueta/{hex}',
                 '/leituras/ultimas/{minutos}',
-                '/leituras/antenas'
+                '/leituras/antenas',
+                '/leituras/foto/{hex}',
+                '/leituras/foto/info/{hex}'
             ]
         })
     except Exception as e:

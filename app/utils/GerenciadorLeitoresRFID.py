@@ -218,7 +218,7 @@ class GerenciadorLeitoresRFID:
                 connection2 = self._get_connection()
                 cursor2 = connection2.cursor(dictionary=True)
                 
-                # Query com LEFT JOIN para obter descrição da etiqueta
+                # Query com LEFT JOIN para obter descrição da etiqueta e informação sobre foto
                 data_query = f"""
                     SELECT 
                         l.CodigoLeitor,
@@ -232,7 +232,16 @@ class GerenciadorLeitoresRFID:
                             WHEN e.Destruida IS NOT NULL THEN 'destruida'
                             WHEN e.id_listaEtiquetasRFID IS NOT NULL THEN 'ativa'
                             ELSE 'nao_cadastrada'
-                        END as StatusEtiqueta
+                        END as StatusEtiqueta,
+                        CASE 
+                            WHEN EXISTS (
+                                SELECT 1 FROM leitoresRFID l2 
+                                WHERE l2.EtiquetaRFID_hex = l.EtiquetaRFID_hex 
+                                  AND l2.Foto IS NOT NULL 
+                                  AND LENGTH(l2.Foto) > 0
+                            ) THEN 1 
+                            ELSE 0 
+                        END as TemFoto
                     FROM leitoresRFID l
                     LEFT JOIN etiquetasRFID e ON l.EtiquetaRFID_hex = e.EtiquetaRFID_hex
                     WHERE {where_clause}
@@ -257,7 +266,8 @@ class GerenciadorLeitoresRFID:
                         'etiqueta_hex': leitura['EtiquetaRFID_hex'],
                         'rssi': leitura['RSSI'],
                         'descricao_equipamento': leitura['DescricaoEquipamento'] or 'Sem descrição',
-                        'status_etiqueta': leitura['StatusEtiqueta']
+                        'status_etiqueta': leitura['StatusEtiqueta'],
+                        'tem_foto': bool(leitura['TemFoto'])
                     }
                     
                     # Formatar horário se for datetime
@@ -527,6 +537,110 @@ class GerenciadorLeitoresRFID:
                 'success': False,
                 'error': str(e),
                 'antenas': []
+            }
+        finally:
+            if cursor:
+                cursor.close()
+            if connection:
+                connection.close()
+    
+    def obter_foto_etiqueta(self, etiqueta_hex):
+        """
+        Obtém a foto mais recente de uma etiqueta específica.
+        
+        Args:
+            etiqueta_hex (str): Código hexadecimal da etiqueta
+            
+        Returns:
+            dict: Resultado com foto (binário) ou erro
+        """
+        try:
+            connection = self._get_connection()
+            cursor = connection.cursor(dictionary=True)
+            
+            # Buscar a foto mais recente para a etiqueta
+            query = """
+                SELECT Foto, Horario
+                FROM leitoresRFID
+                WHERE EtiquetaRFID_hex = %s 
+                  AND Foto IS NOT NULL 
+                  AND LENGTH(Foto) > 0
+                ORDER BY Horario DESC
+                LIMIT 1
+            """
+            
+            cursor.execute(query, (etiqueta_hex,))
+            resultado = cursor.fetchone()
+            
+            if not resultado:
+                return {
+                    'success': False,
+                    'error': 'Nenhuma foto encontrada para esta etiqueta'
+                }
+            
+            return {
+                'success': True,
+                'foto': resultado['Foto'],
+                'horario': resultado['Horario'],
+                'etiqueta': etiqueta_hex
+            }
+            
+        except Exception as e:
+            self.logger.error(f"Erro ao obter foto da etiqueta {etiqueta_hex}: {e}")
+            return {
+                'success': False,
+                'error': str(e)
+            }
+        finally:
+            if cursor:
+                cursor.close()
+            if connection:
+                connection.close()
+    
+    def verificar_foto_etiqueta(self, etiqueta_hex):
+        """
+        Verifica se uma etiqueta possui foto disponível.
+        
+        Args:
+            etiqueta_hex (str): Código hexadecimal da etiqueta
+            
+        Returns:
+            dict: Informações sobre disponibilidade da foto
+        """
+        try:
+            connection = self._get_connection()
+            cursor = connection.cursor(dictionary=True)
+            
+            # Verificar se existe foto para a etiqueta
+            query = """
+                SELECT 
+                    COUNT(*) as total_fotos,
+                    MAX(Horario) as ultima_foto
+                FROM leitoresRFID
+                WHERE EtiquetaRFID_hex = %s 
+                  AND Foto IS NOT NULL 
+                  AND LENGTH(Foto) > 0
+            """
+            
+            cursor.execute(query, (etiqueta_hex,))
+            resultado = cursor.fetchone()
+            
+            tem_foto = resultado['total_fotos'] > 0 if resultado else False
+            
+            return {
+                'success': True,
+                'tem_foto': tem_foto,
+                'total_fotos': resultado['total_fotos'] if resultado else 0,
+                'ultima_foto': resultado['ultima_foto'] if resultado else None,
+                'etiqueta': etiqueta_hex
+            }
+            
+        except Exception as e:
+            self.logger.error(f"Erro ao verificar foto da etiqueta {etiqueta_hex}: {e}")
+            return {
+                'success': False,
+                'error': str(e),
+                'tem_foto': False
             }
         finally:
             if cursor:
