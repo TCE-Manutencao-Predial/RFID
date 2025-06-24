@@ -443,7 +443,7 @@ function previewFoto(input) {
   }
 }
 
-// 2. ADICIONAR função para padronizar código RFID com zeros
+// 2. MODIFICAR função para padronizar código RFID com zeros
 function padronizarCodigoRFID(codigo) {
     // Remove espaços e converte para maiúsculas
     codigo = codigo.trim().toUpperCase();
@@ -465,16 +465,19 @@ function padronizarCodigoRFID(codigo) {
         // Preenche com zeros até completar 24 caracteres
         return codigo.padEnd(TAMANHO_PADRAO, '0');
     } else {
-        // Se não segue o padrão mas é um número válido
-        // Assume que é apenas a parte final e adiciona o prefixo padrão
-        if (/^\d+$/.test(codigo)) {
+        // Verificar se é um código hexadecimal válido (números + letras A-F)
+        const hexValido = /^[0-9A-F]+$/;
+        
+        if (hexValido.test(codigo)) {
+            // É um código hexadecimal válido
             const prefixo = 'AAA0AAAA';
             const numeroZeros = TAMANHO_PADRAO - prefixo.length - codigo.length;
             
             if (numeroZeros > 0) {
+                // Adiciona zeros à esquerda do código hexadecimal
                 return prefixo + '0'.repeat(numeroZeros) + codigo;
             } else {
-                // Se o número é muito grande, usa apenas os últimos dígitos
+                // Se o código é muito grande, usa apenas os últimos caracteres
                 const tamanhoNumero = TAMANHO_PADRAO - prefixo.length;
                 return prefixo + codigo.slice(-tamanhoNumero).padStart(tamanhoNumero, '0');
             }
@@ -792,7 +795,7 @@ document.addEventListener("DOMContentLoaded", function () {
   atualizarEstatisticas();
 });
 
-// 4. ADICIONAR evento para formatar código ao sair do campo (opcional)
+// 4. MODIFICAR evento para formatar código ao sair do campo
 document.addEventListener('DOMContentLoaded', function() {
     const campoCodigoRFID = document.getElementById('etiquetaCodigo');
     
@@ -805,10 +808,25 @@ document.addEventListener('DOMContentLoaded', function() {
         });
         
         // Adicionar placeholder com exemplo
-        campoCodigoRFID.placeholder = 'Ex: AAA0AAAA0000000000002808 ou apenas 2808';
+        campoCodigoRFID.placeholder = 'Ex: AAA0AAAA0000000000002808, 2808 ou A1B2';
         
         // Adicionar atributo de tamanho máximo
         campoCodigoRFID.maxLength = 24;
+        
+        // Adicionar validação em tempo real para aceitar apenas caracteres hexadecimais
+        campoCodigoRFID.addEventListener('input', function() {
+            // Permitir apenas caracteres hexadecimais (0-9, A-F) e o padrão completo
+            const valor = this.value.toUpperCase();
+            const hexValido = /^[0-9A-F]*$/;
+            const padraoCompleto = /^[A-Z0-9]*$/;
+            
+            if (!hexValido.test(valor) && !padraoCompleto.test(valor)) {
+                // Remove caracteres inválidos
+                this.value = valor.replace(/[^0-9A-F]/g, '');
+            } else {
+                this.value = valor;
+            }
+        });
     }
 });
 
