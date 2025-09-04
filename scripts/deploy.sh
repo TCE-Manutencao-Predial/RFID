@@ -109,22 +109,6 @@ deploy_backend() {
 }
 
 
-# Deploy Configuração do Apache
-# ------------------------------------
-
-deploy_apache() {
-    echo "[Deploy] Iniciando configuração do Apache..."
-    
-    if [ -e "./scripts/$APACHE_CONFIG_FILE" ]; then
-        echo "[Deploy] Arquivo de configuração do Apache encontrado. Copiando para o diretório..."
-        sudo cp -v "./scripts/$APACHE_CONFIG_FILE" "$APACHE_CONFIG_DIR/$APACHE_CONFIG"
-        echo "[Deploy] Configuração do Apache concluída."
-    else
-        echo "[Deploy] Arquivo de configuração do Apache não encontrado. Pulando esta etapa."
-    fi
-}
-
-
 # Deploy Servico
 # ------------------------------------
 
@@ -162,7 +146,6 @@ main() {
     atualizar_projeto_local
     deploy_frontend
     deploy_backend
-    deploy_apache
     deploy_servico
     echo "[Deploy] Processo de Deploy concluído com sucesso!"
 }

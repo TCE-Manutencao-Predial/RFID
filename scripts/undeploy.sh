@@ -17,6 +17,3 @@ sudo rm -r $ROOT_BACKEND
 
 # Remover o serviço criado
 sudo rm /usr/lib/systemd/system/$SERVICE_NAME
-
-# Remover configuração do Apache
-sudo rm "$APACHE_CONFIG_DIR/$APACHE_CONFIG_FILE"
