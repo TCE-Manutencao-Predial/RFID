@@ -19,7 +19,8 @@ MYSQL_CONFIG = {
     'user': 'equipamentos_adm',
     'password': 'lOXidexutMoSNX',
     'connection_timeout': 30,
-    'command_timeout': 60
+    'command_timeout': 60,
+    'ssl_disabled': True  # Desabilita verificação SSL para tce.go.gov.br
 }
 
 # Configuração dos diretórios de logs

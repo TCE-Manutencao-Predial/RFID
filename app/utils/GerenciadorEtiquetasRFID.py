@@ -69,14 +69,20 @@ class GerenciadorEtiquetasRFID:
     def _get_connection(self):
         """Cria e retorna uma conexão com o MySQL."""
         try:
-            connection = mysql.connector.connect(
-                host=self.config['host'],
-                database=self.config['database'],
-                user=self.config['user'],
-                password=self.config['password'],
-                connection_timeout=self.config['connection_timeout'],
-                autocommit=True
-            )
+            connection_params = {
+                'host': self.config['host'],
+                'database': self.config['database'],
+                'user': self.config['user'],
+                'password': self.config['password'],
+                'connection_timeout': self.config['connection_timeout'],
+                'autocommit': True
+            }
+            
+            # Desabilita verificação SSL apenas para domínios tce.go.gov.br
+            if 'tce.go.gov.br' in self.config['host'].lower():
+                connection_params['ssl_disabled'] = True
+            
+            connection = mysql.connector.connect(**connection_params)
             return connection
         except Error as e:
             self.logger.error(f"Erro ao conectar ao MySQL: {e}")
