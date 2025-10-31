@@ -206,6 +206,12 @@ class GerenciadorPingRFID:
                 query_params = params.copy()
                 query_params.extend([limite, offset])
                 
+                # LOG da query principal para debug
+                self.logger.debug(f"=== OBTER PINGS - Query Principal ===")
+                self.logger.debug(f"Query: {data_query}")
+                self.logger.debug(f"Params: {query_params}")
+                self.logger.debug(f"=====================================")
+                
                 cursor.execute(data_query, query_params)
                 pings_raw = cursor.fetchall()
                 
@@ -265,6 +271,8 @@ class GerenciadorPingRFID:
                 
             except Exception as e:
                 self.logger.error(f"Erro ao buscar registros PING: {e}")
+                self.logger.error(f"Query que causou erro: {data_query if 'data_query' in locals() else 'N/A'}")
+                self.logger.error(f"Filtros: {filtros}, limite: {limite}, offset: {offset}")
                 raise
             finally:
                 if cursor:
@@ -616,6 +624,15 @@ class GerenciadorPingRFID:
                     'error': 'Parâmetros insuficientes. Forneça (codigo_leitor, antena, horario) ou etiqueta_hex'
                 }
             
+            # LOG da query SQL para debug
+            self.logger.info(f"=== OBTER FOTO PING - Query SQL ===")
+            self.logger.info(f"Query: {query}")
+            if codigo_leitor and antena and horario:
+                self.logger.info(f"Params: codigo_leitor={codigo_leitor}, antena={antena}, horario={horario}")
+            elif etiqueta_hex:
+                self.logger.info(f"Params: etiqueta_hex={etiqueta_hex}")
+            self.logger.info(f"===================================")
+            
             resultado = cursor.fetchone()
             
             if not resultado:
@@ -635,6 +652,8 @@ class GerenciadorPingRFID:
             
         except Exception as e:
             self.logger.error(f"Erro ao obter foto do PING: {e}")
+            self.logger.error(f"Query que causou erro: {query if 'query' in locals() else 'N/A'}")
+            self.logger.error(f"Parametros: codigo_leitor={codigo_leitor}, antena={antena}, horario={horario}, etiqueta_hex={etiqueta_hex}")
             return {
                 'success': False,
                 'error': str(e)
@@ -696,6 +715,15 @@ class GerenciadorPingRFID:
                     'error': 'Parâmetros insuficientes'
                 }
             
+            # LOG da query SQL para debug
+            self.logger.info(f"=== VERIFICAR FOTO PING - Query SQL ===")
+            self.logger.info(f"Query: {query}")
+            if codigo_leitor and antena and horario:
+                self.logger.info(f"Params: codigo_leitor={codigo_leitor}, antena={antena}, horario={horario}")
+            elif etiqueta_hex:
+                self.logger.info(f"Params: etiqueta_hex={etiqueta_hex}")
+            self.logger.info(f"========================================")
+            
             resultado = cursor.fetchone()
             
             tem_foto = resultado['fotos_disponiveis'] > 0 if resultado else False
@@ -713,6 +741,8 @@ class GerenciadorPingRFID:
             
         except Exception as e:
             self.logger.error(f"Erro ao verificar foto do PING: {e}")
+            self.logger.error(f"Query que causou erro: {query if 'query' in locals() else 'N/A'}")
+            self.logger.error(f"Parametros: codigo_leitor={codigo_leitor}, antena={antena}, horario={horario}, etiqueta_hex={etiqueta_hex}")
             return {
                 'success': False,
                 'error': str(e),
