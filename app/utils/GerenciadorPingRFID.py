@@ -170,9 +170,8 @@ class GerenciadorPingRFID:
             # Filtro principal: EtiquetaRFID_hex começa com 'PING_PERIODICO_'
             where_conditions.append("l.EtiquetaRFID_hex LIKE 'PING_PERIODICO_%'")
             
-            # OTIMIZAÇÃO CRÍTICA: Removido "l.Foto IS NOT NULL"
-            # Assumindo que todos os registros PING_PERIODICO_* têm foto
-            # Isso evita scan de coluna BLOB que estava causando lentidão
+            # Filtrar apenas PINGs que têm foto (não usa LENGTH para evitar scan do BLOB)
+            where_conditions.append("l.Foto IS NOT NULL")
 
             # Filtros adicionais do usuário
             if filtros:

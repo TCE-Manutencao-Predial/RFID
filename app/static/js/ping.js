@@ -1,5 +1,5 @@
 // ping.js - JavaScript para página de PING
-// Última atualização: 2025-10-31 - Estrutura de tabela com 7 colunas
+// Última atualização: 2025-10-31 - Estrutura de tabela com 6 colunas (removida coluna Foto)
 
 // Variáveis globais
 let paginaAtual = 1;
@@ -239,27 +239,12 @@ function renderizarTabela(pings) {
       </div>
     `;
 
-    // Indicador de foto
-    const fotoIndicador = ping.tem_foto
-      ? '<i class="fas fa-check-circle foto-disponivel" title="Foto disponível"></i> Sim'
-      : '<i class="fas fa-times-circle foto-indisponivel" title="Sem foto"></i> Não';
-
-    // Botão de foto - só mostrar se tem foto disponível
-    const botaoFoto = ping.tem_foto 
-      ? `<button class="rfid-action-btn rfid-action-btn-photo" 
-                onclick="verFotoPing('${ping.etiqueta_hex}', '${ping.codigo_leitor}', '${ping.antena}', '${ping.horario}')"
-                title="Ver foto">
-          <i class="fas fa-camera"></i> Foto
-        </button>`
-      : '';
-
     tr.innerHTML = `
       <td data-horario="${ping.horario}">${ping.horario_formatado || ping.horario}</td>
       <td>${ping.codigo_leitor}</td>
       <td><span class="antena-badge">${ping.antena}</span></td>
       <td><span class="ping-badge">${ping.etiqueta_hex}</span></td>
       <td>${rssiIndicator}</td>
-      <td>${fotoIndicador}</td>
       <td>
         <div class="rfid-actions">
           <button class="rfid-action-btn rfid-action-btn-info" 
@@ -267,7 +252,11 @@ function renderizarTabela(pings) {
                   title="Ver histórico">
             <i class="fas fa-history"></i> Histórico
           </button>
-          ${botaoFoto}
+          <button class="rfid-action-btn rfid-action-btn-photo" 
+                  onclick="verFotoPing('${ping.etiqueta_hex}', '${ping.codigo_leitor}', '${ping.antena}', '${ping.horario}')"
+                  title="Ver foto">
+            <i class="fas fa-camera"></i> Foto
+          </button>
         </div>
       </td>
     `;
