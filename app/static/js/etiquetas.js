@@ -858,6 +858,10 @@ function navegarPara(secao) {
             window.location.href = '/RFID/emprestimos';
             break;
         
+        case 'ping':
+            window.location.href = '/RFID/ping';
+            break;
+        
         default:
             showToast('Seção não encontrada', 'error');
     }

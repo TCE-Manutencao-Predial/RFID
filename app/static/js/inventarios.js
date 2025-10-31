@@ -150,6 +150,9 @@ function navegarPara(pagina) {
         case 'emprestimos':
             window.location.href = `${baseUrl}${prefixo}/emprestimos`;
             break;
+        case 'ping':
+            window.location.href = `${baseUrl}${prefixo}/ping`;
+            break;
         default:
             console.error('Página não encontrada:', pagina);
     }

@@ -1,16 +1,14 @@
-// leitores.js - JavaScript para página de leituras RFID
+// ping.js - JavaScript para página de PING
 
 // Variáveis globais
 let paginaAtual = 1;
-const registrosPorPagina = 50; // Mais registros para leituras
+const registrosPorPagina = 50;
 let totalRegistros = 0;
 let autoRefreshInterval = null;
 let antenasDisponiveis = [];
-
-// 1) Nova variável global para guardar o scroll
 let lastScrollY = 0;
 
-// Sistema de Toast (reutilizado)
+// Sistema de Toast
 function showToast(message, type = "info", title = "") {
   const toastContainer = document.getElementById("toastContainer");
   const toast = document.createElement("div");
@@ -60,15 +58,11 @@ document.addEventListener("DOMContentLoaded", function () {
   carregarAntenas();
   carregarDados();
   carregarEstatisticas();
-  configurarAutoRefresh();
 });
 
 function inicializarEventos() {
   // Eventos de filtro
   document.getElementById("filtroEtiqueta")
-    .addEventListener("input", debounce(aplicarFiltros, 500));
-  // Adicionado listener para descrição
-  document.getElementById("filtroDescricao")
     .addEventListener("input", debounce(aplicarFiltros, 500));
   document.getElementById("filtroAntena")
     .addEventListener("change", aplicarFiltros);
@@ -113,7 +107,7 @@ function atualizarDados() {
 
 async function carregarDados(forceRefresh = false, showToastMessage = false) {
   mostrarLoading();
-  let response = null;
+  
   try {
     const offset = (paginaAtual - 1) * registrosPorPagina;
     const filtros = obterFiltros();
@@ -134,12 +128,12 @@ async function carregarDados(forceRefresh = false, showToastMessage = false) {
     let url;
     
     if (minutosRecentes) {
-      url = `/RFID/api/leituras/ultimas/${minutosRecentes}?${params}`;
+      url = `/RFID/api/ping/ultimos/${minutosRecentes}?${params}`;
     } else {
-      url = `/RFID/api/leituras?${params}`;
+      url = `/RFID/api/ping?${params}`;
     }
 
-    response = await fetch(url);
+    const response = await fetch(url);
 
     if (!response.ok) {
       throw new Error(`Erro HTTP: ${response.status}`);
@@ -149,13 +143,13 @@ async function carregarDados(forceRefresh = false, showToastMessage = false) {
 
     if (data.success) {
       totalRegistros = data.total;
-      renderizarTabela(data.leituras);
+      renderizarTabela(data.pings);
       atualizarPaginacao();
-      window.scrollTo(0, lastScrollY); // restaura a posição guardada
+      window.scrollTo(0, lastScrollY);
 
-      if (showToastMessage && data.leituras.length > 0) {
+      if (showToastMessage && data.pings.length > 0) {
         const cacheInfo = data.from_cache ? " (do cache)" : " (atualizado)";
-        showToast(`${data.leituras.length} leituras carregadas${cacheInfo}`, "success");
+        showToast(`${data.pings.length} registros de PING carregados${cacheInfo}`, "success");
       }
     } else {
       throw new Error(data.error || "Erro ao carregar dados");
@@ -173,14 +167,10 @@ function obterFiltros() {
   const etiqueta = document.getElementById("filtroEtiqueta").value.trim();
   if (etiqueta) filtros.etiqueta = etiqueta;
 
-  const descricao = document.getElementById("filtroDescricao").value.trim();
-  if (descricao) filtros.descricao = descricao;
-
   const antena = document.getElementById("filtroAntena").value;
   if (antena) {
-    // Verificar se é filtro por leitor completo
     if (antena.startsWith('leitor:')) {
-      filtros.codigo_leitor = antena.substring(7); // Remove 'leitor:'
+      filtros.codigo_leitor = antena.substring(7);
     } else {
       filtros.antena = antena;
     }
@@ -199,16 +189,16 @@ function obterFiltros() {
   return filtros;
 }
 
-function renderizarTabela(leituras) {
+function renderizarTabela(pings) {
   const tbody = document.getElementById("tabelaCorpo");
-  const tabela = document.getElementById("tabelaLeituras");
+  const tabela = document.getElementById("tabelaPings");
   const emptyState = document.getElementById("emptyState");
   const loadingState = document.getElementById("loadingState");
   const paginacao = document.getElementById("paginacao");
 
   loadingState.style.display = "none";
 
-  if (leituras.length === 0) {
+  if (pings.length === 0) {
     tabela.style.display = "none";
     paginacao.style.display = "none";
     emptyState.style.display = "block";
@@ -221,36 +211,23 @@ function renderizarTabela(leituras) {
 
   tbody.innerHTML = "";
 
-  leituras.forEach((leitura, index) => {
+  pings.forEach((ping) => {
     const tr = document.createElement("tr");
     
-    // Adicionar classe para leituras recentes
+    // Adicionar classe para PINGs recentes
     const agora = new Date();
-    const horaLeitura = new Date(leitura.horario);
-    const diffMinutos = (agora - horaLeitura) / (1000 * 60);
+    const horaPing = new Date(ping.horario);
+    const diffMinutos = (agora - horaPing) / (1000 * 60);
     
     if (diffMinutos < 5) {
-      tr.classList.add("leitura-recente");
-    }
-
-    // Status da etiqueta
-    let statusBadge = '';
-    switch (leitura.status_etiqueta) {
-      case 'ativa':
-        statusBadge = '<span class="rfid-badge rfid-badge-active">Cadastrada</span>';
-        break;
-      case 'destruida':
-        statusBadge = '<span class="rfid-badge rfid-badge-destroyed">Destruída</span>';
-        break;
-      default:
-        statusBadge = '<span class="rfid-badge rfid-badge-nao-cadastrada">Não Cadastrada</span>';
+      tr.classList.add("ping-recente");
     }
 
     // Indicador RSSI
-    const rssiClass = getRSSIClass(leitura.rssi);
+    const rssiClass = getRSSIClass(ping.rssi);
     const rssiIndicator = `
       <div class="rssi-indicator ${rssiClass}">
-        <span class="rssi-value">${leitura.rssi}</span>
+        <span class="rssi-value">${ping.rssi}</span>
         <div class="rssi-bars">
           <div class="rssi-bar"></div>
           <div class="rssi-bar"></div>
@@ -260,29 +237,33 @@ function renderizarTabela(leituras) {
       </div>
     `;
 
-    // Usar antena_completa se disponível, senão manter formato antigo
-    const antenaDisplay = leitura.antena_completa || `Antena ${leitura.antena}`;
+    // Usar antena_completa se disponível
+    const antenaDisplay = ping.antena_completa || `Antena ${ping.antena}`;
+
+    // Indicador de foto
+    const fotoIndicador = ping.tem_foto
+      ? '<i class="fas fa-check-circle foto-disponivel" title="Foto disponível"></i> Sim'
+      : '<i class="fas fa-times-circle foto-indisponivel" title="Sem foto"></i> Não';
 
     // Botão de foto - só mostrar se tem foto disponível
-    const botaoFoto = leitura.tem_foto 
+    const botaoFoto = ping.tem_foto 
       ? `<button class="rfid-action-btn rfid-action-btn-photo" 
-                onclick="verFotoEtiqueta('${leitura.etiqueta_hex}')"
+                onclick="verFotoPing('${ping.etiqueta_hex}')"
                 title="Ver foto">
           <i class="fas fa-camera"></i> Foto
         </button>`
       : '';
 
     tr.innerHTML = `
-      <td>${leitura.horario_formatado || leitura.horario}</td>
-      <td><span class="rfid-etiqueta">${leitura.etiqueta_hex}</span></td>
-      <td>${leitura.descricao_equipamento || '-'}</td>
+      <td>${ping.horario_formatado || ping.horario}</td>
+      <td><span class="ping-badge">${ping.etiqueta_hex}</span></td>
       <td><span class="antena-badge">${antenaDisplay}</span></td>
       <td>${rssiIndicator}</td>
-      <td>${statusBadge}</td>
+      <td>${fotoIndicador}</td>
       <td>
         <div class="rfid-actions">
           <button class="rfid-action-btn rfid-action-btn-info" 
-                  onclick="verDetalhesEtiqueta('${leitura.etiqueta_hex}', '${leitura.descricao_equipamento || 'Sem descrição'}', '${leitura.status_etiqueta}')"
+                  onclick="verDetalhesPing('${ping.etiqueta_hex}')"
                   title="Ver histórico">
             <i class="fas fa-history"></i> Histórico
           </button>
@@ -305,7 +286,7 @@ function getRSSIClass(rssi) {
 
 async function carregarAntenas() {
   try {
-    const response = await fetch('/RFID/api/leituras/antenas');
+    const response = await fetch('/RFID/api/ping/antenas');
     const data = await response.json();
 
     if (data.success) {
@@ -362,23 +343,23 @@ async function carregarEstatisticas(forceRefresh = false) {
       params.append("force_refresh", "true");
     }
 
-    const response = await fetch(`/RFID/api/leituras/estatisticas?${params}`);
+    const response = await fetch(`/RFID/api/ping/estatisticas?${params}`);
     const data = await response.json();
 
     if (data.success && data.estatisticas) {
       const stats = data.estatisticas;
       
-      document.getElementById("totalLeituras").textContent = 
-        formatarNumero(stats.total_leituras || 0);
+      document.getElementById("totalPings").textContent = 
+        formatarNumero(stats.total_pings || 0);
       
-      document.getElementById("etiquetasUnicas").textContent = 
-        formatarNumero(stats.total_etiquetas_unicas || 0);
+      document.getElementById("pingsComFoto").textContent = 
+        formatarNumero(stats.pings_com_foto || 0);
       
       document.getElementById("antenasAtivas").textContent = 
         stats.total_antenas || 0;
       
-      document.getElementById("ultimaLeitura").textContent = 
-        stats.ultima_leitura_formatada || '--';
+      document.getElementById("ultimoPing").textContent = 
+        stats.ultimo_ping_formatado || '--';
     }
   } catch (error) {
     console.error("Erro ao carregar estatísticas:", error);
@@ -389,33 +370,18 @@ function formatarNumero(num) {
   return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
 }
 
-function verDetalhesEtiqueta(codigo, descricao, status) {
+function verDetalhesPing(codigo) {
   // Preencher informações básicas
   document.getElementById("detalhesCodigo").textContent = codigo;
-  document.getElementById("detalhesDescricao").textContent = descricao;
-  
-  // Status badge
-  let statusHtml = '';
-  switch (status) {
-    case 'ativa':
-      statusHtml = '<span class="rfid-badge rfid-badge-active">Cadastrada Ativa</span>';
-      break;
-    case 'destruida':
-      statusHtml = '<span class="rfid-badge rfid-badge-destroyed">Cadastrada Destruída</span>';
-      break;
-    default:
-      statusHtml = '<span class="rfid-badge rfid-badge-nao-cadastrada">Não Cadastrada</span>';
-  }
-  document.getElementById("detalhesStatus").innerHTML = statusHtml;
   
   // Carregar histórico
-  carregarHistoricoEtiqueta(codigo);
+  carregarHistoricoPing(codigo);
   
   // Abrir modal
   abrirModal("modalDetalhes");
 }
 
-async function carregarHistoricoEtiqueta(codigo) {
+async function carregarHistoricoPing(codigo) {
   const historicoLoading = document.getElementById("historicoLoading");
   const historicoContent = document.getElementById("historicoContent");
   
@@ -423,24 +389,25 @@ async function carregarHistoricoEtiqueta(codigo) {
   historicoContent.innerHTML = "";
   
   try {
-    const response = await fetch(`/RFID/api/leituras/etiqueta/${codigo}?limite=50`);
+    const response = await fetch(`/RFID/api/ping/etiqueta/${codigo}?limite=50`);
     const data = await response.json();
     
-    if (data.success && data.leituras.length > 0) {
+    if (data.success && data.pings.length > 0) {
       let html = '<div class="historico-list">';
       
-      data.leituras.forEach(leitura => {
-        const rssiClass = getRSSIClass(leitura.RSSI);
-        // Criar formato completo da antena se disponível
-        const antenaDisplay = leitura.CodigoLeitor 
-          ? `[${leitura.CodigoLeitor}] A${leitura.Antena}` 
-          : `Antena ${leitura.Antena}`;
+      data.pings.forEach(ping => {
+        const rssiClass = getRSSIClass(ping.RSSI);
+        const antenaDisplay = ping.CodigoLeitor 
+          ? `[${ping.CodigoLeitor}] A${ping.Antena}` 
+          : `Antena ${ping.Antena}`;
+        const temFoto = ping.TemFoto ? '<i class="fas fa-camera foto-disponivel"></i>' : '';
           
         html += `
           <div class="historico-item">
             <div class="historico-time">
               <i class="fas fa-clock"></i>
-              ${leitura.horario_formatado || leitura.Horario}
+              ${ping.horario_formatado || ping.Horario}
+              ${temFoto}
             </div>
             <div class="historico-details">
               <div class="historico-antena">
@@ -448,11 +415,11 @@ async function carregarHistoricoEtiqueta(codigo) {
                 ${antenaDisplay}
               </div>
               <div class="rssi-indicator ${rssiClass}">
-                RSSI: ${leitura.RSSI}
+                RSSI: ${ping.RSSI}
               </div>
               <div>
                 <i class="fas fa-microchip"></i>
-                Leitor: ${leitura.CodigoLeitor}
+                Leitor: ${ping.CodigoLeitor}
               </div>
             </div>
           </div>
@@ -472,6 +439,122 @@ async function carregarHistoricoEtiqueta(codigo) {
   }
 }
 
+async function verFotoPing(codigo) {
+  try {
+    // Preencher informações no modal
+    document.getElementById("fotoEtiquetaCodigo").textContent = codigo;
+    document.getElementById("fotoEtiquetaInfo").textContent = "Verificando disponibilidade...";
+    
+    // Mostrar loading
+    const fotoContainer = document.getElementById("fotoContainer");
+    const fotoLoading = document.getElementById("fotoLoading");
+    
+    fotoContainer.innerHTML = '';
+    fotoLoading.style.display = "block";
+    
+    // Abrir modal
+    abrirModal("modalFoto");
+
+    // Verificar se o PING tem foto
+    const infoResponse = await fetch(`/RFID/api/ping/foto/info/${codigo}`);
+    
+    if (!infoResponse.ok) {
+      throw new Error(`Erro HTTP: ${infoResponse.status}`);
+    }
+    
+    const infoData = await infoResponse.json();
+    
+    if (!infoData.success) {
+      throw new Error(infoData.error || "Erro ao verificar foto");
+    }
+    
+    // Atualizar informações da foto
+    document.getElementById("fotoEtiquetaInfo").textContent = 
+      `Total de fotos: ${infoData.total_fotos} | Última foto: ${infoData.ultima_foto ? new Date(infoData.ultima_foto).toLocaleString('pt-BR') : 'N/A'}`;
+    
+    if (!infoData.tem_foto) {
+      fotoLoading.style.display = "none";
+      fotoContainer.innerHTML = `
+        <div class="foto-erro">
+          <i class="fas fa-image"></i>
+          <p>Este PING não possui foto disponível</p>
+          <small>Nenhuma foto foi encontrada nos registros deste PING.</small>
+        </div>
+      `;
+      return;
+    }
+    
+    // Carregar a foto
+    const fotoUrl = `/RFID/api/ping/foto/${codigo}?t=${Date.now()}`;
+    
+    const img = new Image();
+    img.onload = function() {
+      fotoLoading.style.display = "none";
+      fotoContainer.innerHTML = `
+        <img src="${fotoUrl}" alt="Foto do PING ${codigo}" class="foto-etiqueta" />
+        <div class="foto-controls">
+          <button class="rfid-btn rfid-btn-secondary" onclick="downloadFoto('${codigo}')">
+            <i class="fas fa-download"></i> Baixar
+          </button>
+          <button class="rfid-btn rfid-btn-secondary" onclick="abrirFotoNovaAba('${fotoUrl}')">
+            <i class="fas fa-external-link-alt"></i> Nova Aba
+          </button>
+        </div>
+      `;
+    };
+    
+    img.onerror = function() {
+      fotoLoading.style.display = "none";
+      fotoContainer.innerHTML = `
+        <div class="foto-erro">
+          <i class="fas fa-exclamation-triangle"></i>
+          <p>Erro ao carregar a imagem</p>
+          <small>A imagem pode estar corrompida ou em um formato não suportado.</small>
+          <button class="rfid-btn rfid-btn-primary" onclick="verFotoPing('${codigo}')">
+            <i class="fas fa-redo"></i> Tentar Novamente
+          </button>
+        </div>
+      `;
+    };
+    
+    img.src = fotoUrl;
+    
+  } catch (error) {
+    console.error("Erro ao verificar foto:", error);
+    
+    const fotoLoading = document.getElementById("fotoLoading");
+    const fotoContainer = document.getElementById("fotoContainer");
+    
+    fotoLoading.style.display = "none";
+    fotoContainer.innerHTML = `
+      <div class="foto-erro">
+        <i class="fas fa-exclamation-triangle"></i>
+        <p>Erro ao carregar foto</p>
+        <small>${error.message}</small>
+        <button class="rfid-btn rfid-btn-primary" onclick="verFotoPing('${codigo}')">
+          <i class="fas fa-redo"></i> Tentar Novamente
+        </button>
+      </div>
+    `;
+    
+    showToast(`Erro ao carregar foto: ${error.message}`, "error");
+  }
+}
+
+function downloadFoto(codigo) {
+  const link = document.createElement('a');
+  link.href = `/RFID/api/ping/foto/${codigo}`;
+  link.download = `ping_${codigo}.jpg`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  showToast("Download iniciado", "success");
+}
+
+function abrirFotoNovaAba(url) {
+  window.open(url, '_blank');
+}
+
 // Funções de modal
 function abrirModal(modalId) {
   const modal = document.getElementById(modalId);
@@ -485,13 +568,7 @@ function fecharModal(modalId) {
   setTimeout(() => modal.style.display = "none", 300);
 }
 
-// Auto-refresh configurável
-function configurarAutoRefresh() {
-  // Por enquanto, sem auto-refresh automático
-  // Pode ser implementado com checkbox ou configuração
-}
-
-// Funções de paginação (reutilizadas)
+// Funções de paginação
 function atualizarPaginacao() {
   const inicio = (paginaAtual - 1) * registrosPorPagina + 1;
   const fim = Math.min(paginaAtual * registrosPorPagina, totalRegistros);
@@ -541,7 +618,6 @@ function atualizarPaginacao() {
   controles.appendChild(btnProximo);
 }
 
-// 2) Substitua a função criarBotaoPagina por esta versão que salva o scroll
 function criarBotaoPagina(texto, ativo, onclick) {
   const btn = document.createElement("button");
   btn.className = "rfid-page-btn";
@@ -549,9 +625,9 @@ function criarBotaoPagina(texto, ativo, onclick) {
   btn.disabled = !ativo;
   if (ativo && onclick) {
     btn.addEventListener("click", () => {
-      lastScrollY = window.scrollY;  // salva posição
+      lastScrollY = window.scrollY;
       onclick();
-      btn.blur();                   // remove foco
+      btn.blur();
     });
   }
   return btn;
@@ -559,7 +635,6 @@ function criarBotaoPagina(texto, ativo, onclick) {
 
 function mostrarLoading() {
   document.getElementById("loadingState").style.display = "block";
-  // document.getElementById("tabelaLeituras").style.display = "none"; // comentado
   document.getElementById("emptyState").style.display = "none";
   document.getElementById("paginacao").style.display = "none";
 }
@@ -577,190 +652,48 @@ function mostrarErro(mensagem, detalhe = "") {
   `;
   emptyState.style.display = "block";
   document.getElementById("loadingState").style.display = "none";
-  document.getElementById("tabelaLeituras").style.display = "none";
+  document.getElementById("tabelaPings").style.display = "none";
 }
 
 function exportarDados() {
   showToast("Funcionalidade de exportação será implementada em breve!", "info");
 }
 
-// Função para verificar e exibir foto da etiqueta
-async function verFotoEtiqueta(codigo) {
-  try {
-    // Preencher informações no modal
-    document.getElementById("fotoEtiquetaCodigo").textContent = codigo;
-    document.getElementById("fotoEtiquetaInfo").textContent = "Verificando disponibilidade...";
+// Navegação
+function navegarPara(secao) {
+  switch(secao) {
+    case 'etiquetas':
+      window.location.href = '/RFID/';
+      break;
+      
+    case 'inventarios':
+      window.location.href = '/RFID/inventarios';
+      break;
     
-    // Mostrar loading
-    const fotoContainer = document.getElementById("fotoContainer");
-    const fotoLoading = document.getElementById("fotoLoading");
+    case 'leitores':
+      window.location.href = '/RFID/leitores';
+      break;
     
-    fotoContainer.innerHTML = '';
-    fotoLoading.style.display = "block";
+    case 'emprestimos':
+      window.location.href = '/RFID/emprestimos';
+      break;
     
-    // Abrir modal
-    abrirModal("modalFoto");
-
-    // Primeiro, verificar se a etiqueta tem foto
-    const infoResponse = await fetch(`/RFID/api/leituras/foto/info/${codigo}`);
+    case 'ping':
+      // Já estamos aqui
+      break;
     
-    if (!infoResponse.ok) {
-      throw new Error(`Erro HTTP: ${infoResponse.status}`);
-    }
-    
-    const infoData = await infoResponse.json();
-    
-    if (!infoData.success) {
-      throw new Error(infoData.error || "Erro ao verificar foto");
-    }
-    
-    // Atualizar informações da foto
-    document.getElementById("fotoEtiquetaInfo").textContent = 
-      `Total de fotos: ${infoData.total_fotos} | Última foto: ${infoData.ultima_foto ? new Date(infoData.ultima_foto).toLocaleString('pt-BR') : 'N/A'}`;
-    
-    if (!infoData.tem_foto) {
-      fotoLoading.style.display = "none";
-      fotoContainer.innerHTML = `
-        <div class="foto-erro">
-          <i class="fas fa-image"></i>
-          <p>Esta etiqueta não possui foto disponível</p>
-          <small>Nenhuma foto foi encontrada nos registros de leitura desta etiqueta.</small>
-        </div>
-      `;
-      return;
-    }
-    
-    // Carregar a foto
-    const fotoUrl = `/RFID/api/leituras/foto/${codigo}?t=${Date.now()}`; // Cache bust
-    
-    const img = new Image();
-    img.onload = function() {
-      fotoLoading.style.display = "none";
-      fotoContainer.innerHTML = `
-        <img src="${fotoUrl}" alt="Foto da etiqueta ${codigo}" class="foto-etiqueta" />
-        <div class="foto-controls">
-          <button class="rfid-btn rfid-btn-secondary" onclick="downloadFoto('${codigo}')">
-            <i class="fas fa-download"></i> Baixar
-          </button>
-          <button class="rfid-btn rfid-btn-secondary" onclick="abrirFotoNovaAba('${fotoUrl}')">
-            <i class="fas fa-external-link-alt"></i> Nova Aba
-          </button>
-        </div>
-      `;
-    };
-    
-    img.onerror = function() {
-      fotoLoading.style.display = "none";
-      fotoContainer.innerHTML = `
-        <div class="foto-erro">
-          <i class="fas fa-exclamation-triangle"></i>
-          <p>Erro ao carregar a imagem</p>
-          <small>A imagem pode estar corrompida ou em um formato não suportado.</small>
-          <button class="rfid-btn rfid-btn-primary" onclick="verFotoEtiqueta('${codigo}')">
-            <i class="fas fa-redo"></i> Tentar Novamente
-          </button>
-        </div>
-      `;
-    };
-    
-    img.src = fotoUrl;
-    
-  } catch (error) {
-    console.error("Erro ao verificar foto:", error);
-    
-    // Atualizar o modal com erro
-    const fotoLoading = document.getElementById("fotoLoading");
-    const fotoContainer = document.getElementById("fotoContainer");
-    
-    fotoLoading.style.display = "none";
-    fotoContainer.innerHTML = `
-      <div class="foto-erro">
-        <i class="fas fa-exclamation-triangle"></i>
-        <p>Erro ao carregar foto</p>
-        <small>${error.message}</small>
-        <button class="rfid-btn rfid-btn-primary" onclick="verFotoEtiqueta('${codigo}')">
-          <i class="fas fa-redo"></i> Tentar Novamente
-        </button>
-      </div>
-    `;
-    
-    showToast(`Erro ao carregar foto: ${error.message}`, "error");
+    default:
+      showToast('Seção não encontrada', 'error');
   }
 }
 
-// Função para baixar foto
-function downloadFoto(codigo) {
-  const link = document.createElement('a');
-  link.href = `/RFID/api/leituras/foto/${codigo}`;
-  link.download = `etiqueta_${codigo}.jpg`;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  showToast("Download iniciado", "success");
-}
-
-// Função para abrir foto em nova aba
-function abrirFotoNovaAba(url) {
-  window.open(url, '_blank');
-}
-
-// Navegação
-function navegarPara(secao) {
-    switch(secao) {
-        case 'etiquetas':
-            window.location.href = '/RFID/';
-            break;
-            
-        case 'inventarios':
-            window.location.href = '/RFID/inventarios';
-            break;
-        
-        case 'leitores':
-            // Já estamos aqui - poderia recarregar ou não fazer nada
-            // window.location.href = '/RFID/leitores';
-            break;
-        
-        case 'emprestimos':
-            window.location.href = '/RFID/emprestimos';
-            break;
-        
-        case 'ping':
-            window.location.href = '/RFID/ping';
-            break;
-        
-        default:
-            showToast('Seção não encontrada', 'error');
-    }
-}
-
-
-// Adicionar tooltips aos botões de navegação
+// Destacar botão da página atual
 document.addEventListener('DOMContentLoaded', function() {
-    // Adicionar data-tooltip aos botões de navegação
-    const navButtons = document.querySelectorAll('.rfid-nav-btn');
-    navButtons.forEach(btn => {
-        const texto = btn.querySelector('span').textContent;
-        btn.setAttribute('data-tooltip', texto);
-    });
-    
-    // Remover classe active de todos os botões primeiro
-    const allNavButtons = document.querySelectorAll('.rfid-nav-btn');
-    allNavButtons.forEach(btn => btn.classList.remove('active'));
-    
-    // Destacar botão da página atual
-    const currentPath = window.location.pathname;
-    
-    // Lógica específica para cada página
-    if (currentPath === '/RFID/' || 
-        currentPath === '/RFID' || 
-        currentPath === '/RFID/index' || 
-        currentPath === '/RFID/etiquetas') {
-        document.querySelector('.rfid-nav-btn[onclick*="etiquetas"]')?.classList.add('active');
-    } else if (currentPath.includes('inventarios')) {
-        document.querySelector('.rfid-nav-btn[onclick*="inventarios"]')?.classList.add('active');
-    } else if (currentPath.includes('leitores')) {
-        document.querySelector('.rfid-nav-btn[onclick*="leitores"]')?.classList.add('active');
-    } else if (currentPath.includes('emprestimos')) {
-        document.querySelector('.rfid-nav-btn[onclick*="emprestimos"]')?.classList.add('active');
-    }
+  const allNavButtons = document.querySelectorAll('.rfid-nav-btn');
+  allNavButtons.forEach(btn => btn.classList.remove('active'));
+  
+  const currentPath = window.location.pathname;
+  if (currentPath.includes('ping')) {
+    document.querySelector('.rfid-nav-btn[onclick*="ping"]')?.classList.add('active');
+  }
 });

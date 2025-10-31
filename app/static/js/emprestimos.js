@@ -1076,6 +1076,10 @@ function navegarPara(secao) {
       // Já estamos aqui
       break;
 
+    case "ping":
+      window.location.href = "/RFID/ping";
+      break;
+
     default:
       showToast("Seção não encontrada", "error");
   }

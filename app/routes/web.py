@@ -80,3 +80,20 @@ def emprestimos():
     except Exception as e:
         logger.error(f"Erro ao carregar página de empréstimos: {e}")
         return render_template('erro_interno.html'), 500
+
+@web_bp.route('/ping')
+@web_bp.route('/ping.html')
+def ping():
+    """Página de monitoramento de registros PING."""
+    try:
+        gerenciador = current_app.config.get('GERENCIADOR_RFID')
+        if not gerenciador:
+            logger.error("Gerenciador RFID não inicializado")
+            return render_template('erro_interno.html'), 500
+        
+        # Renderiza a página de PING
+        return render_template('ping.html')
+    
+    except Exception as e:
+        logger.error(f"Erro ao carregar página de PING: {e}")
+        return render_template('erro_interno.html'), 500

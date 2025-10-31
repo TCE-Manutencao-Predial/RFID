@@ -48,6 +48,15 @@ def create_app():
     except Exception as e:
         rfid_logger.error(f"Erro ao inicializar gerenciador de inventários: {e}")
         app.config['GERENCIADOR_INVENTARIOS_RFID'] = None
+    
+    # Inicializa gerenciador de PING RFID
+    try:
+        from .utils.GerenciadorPingRFID import GerenciadorPingRFID
+        app.config['GERENCIADOR_PING'] = GerenciadorPingRFID.get_instance()
+        rfid_logger.info("Gerenciador de PING RFID iniciado")
+    except Exception as e:
+        rfid_logger.error(f"Erro ao inicializar gerenciador de PING: {e}")
+        app.config['GERENCIADOR_PING'] = None
 
     # Handlers de erro
     @app.errorhandler(404)
@@ -71,6 +80,7 @@ def create_app():
     from .routes.api_leitores import api_leitores_bp
     from .routes.api_emprestimos import api_emprestimos_bp
     from .routes.api_inventarios import api_inventarios_bp
+    from .routes.api_ping import api_ping_bp
     
     # IMPORTANTE: Registrar com url_prefix
     app.register_blueprint(web_bp, url_prefix=ROUTES_PREFIX)
@@ -78,6 +88,7 @@ def create_app():
     app.register_blueprint(api_leitores_bp, url_prefix=f'{ROUTES_PREFIX}/api')
     app.register_blueprint(api_emprestimos_bp, url_prefix=f'{ROUTES_PREFIX}/api')
     app.register_blueprint(api_inventarios_bp, url_prefix=f'{ROUTES_PREFIX}/api')
+    app.register_blueprint(api_ping_bp, url_prefix=f'{ROUTES_PREFIX}/api')
     
     # Log de rotas registradas para debug
     rfid_logger.info("Rotas registradas:")

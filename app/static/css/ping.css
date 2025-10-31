@@ -1,0 +1,376 @@
+/* ping.css - Estilos específicos para página de PING */
+
+/* Herda estilos de leitores.css */
+@import url('leitores.css');
+
+/* Customizações específicas para PING */
+
+/* Badge de PING */
+.ping-badge {
+  display: inline-block;
+  padding: 4px 10px;
+  background: linear-gradient(135deg, #17a2b8, #138496);
+  color: white;
+  border-radius: 4px;
+  font-size: 0.85em;
+  font-weight: 600;
+  font-family: monospace;
+}
+
+/* Indicador de foto disponível */
+.foto-disponivel {
+  color: var(--rfid-success);
+  font-weight: bold;
+}
+
+.foto-indisponivel {
+  color: var(--rfid-muted);
+}
+
+/* RSSI indicator para PING */
+.rssi-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-weight: 600;
+}
+
+.rssi-value {
+  font-family: monospace;
+  font-size: 0.9em;
+}
+
+.rssi-bars {
+  display: inline-flex;
+  gap: 2px;
+  align-items: flex-end;
+}
+
+.rssi-bar {
+  width: 4px;
+  background: #ddd;
+  border-radius: 2px;
+  transition: background 0.3s;
+}
+
+.rssi-bar:nth-child(1) { height: 8px; }
+.rssi-bar:nth-child(2) { height: 12px; }
+.rssi-bar:nth-child(3) { height: 16px; }
+.rssi-bar:nth-child(4) { height: 20px; }
+
+/* Níveis de sinal RSSI */
+.rssi-excellent .rssi-bar { background: var(--rfid-success); }
+.rssi-good .rssi-bar:nth-child(-n+3) { background: var(--rfid-success); }
+.rssi-fair .rssi-bar:nth-child(-n+2) { background: var(--rfid-warning); }
+.rssi-poor .rssi-bar:nth-child(1) { background: var(--rfid-danger); }
+
+/* Badge de antena */
+.antena-badge {
+  display: inline-block;
+  padding: 4px 10px;
+  background: #e9ecef;
+  border-radius: 4px;
+  font-size: 0.85em;
+  font-weight: 600;
+  font-family: monospace;
+  color: var(--rfid-dark);
+}
+
+/* Detalhes do PING */
+.detalhes-info {
+  background: var(--rfid-light);
+  padding: 20px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+}
+
+.detalhes-info h4 {
+  margin: 0 0 10px 0;
+  color: var(--rfid-dark);
+}
+
+.detalhes-info p {
+  margin: 5px 0;
+  color: #6c757d;
+}
+
+.detalhes-info .rfid-etiqueta {
+  padding: 4px 8px;
+}
+
+/* Histórico de PINGs */
+.historico-container {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.historico-container h4 {
+  color: var(--rfid-dark);
+  margin-bottom: 15px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.historico-item {
+  background: var(--rfid-light);
+  padding: 12px;
+  border-radius: 6px;
+  margin-bottom: 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  transition: background 0.2s;
+}
+
+.historico-item:hover {
+  background: #e9ecef;
+}
+
+.historico-time {
+  font-weight: 600;
+  color: var(--rfid-dark);
+  font-size: 0.9em;
+}
+
+.historico-details {
+  display: flex;
+  gap: 15px;
+  align-items: center;
+  font-size: 0.85em;
+  color: #6c757d;
+}
+
+.historico-antena {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+/* Botão de foto */
+.rfid-action-btn-photo {
+  background: linear-gradient(135deg, #6f42c1, #8a63d2);
+  border-color: #6f42c1;
+  color: white;
+}
+
+.rfid-action-btn-photo:hover {
+  background: linear-gradient(135deg, #5a32a3, #6f42c1);
+  border-color: #5a32a3;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(111, 66, 193, 0.3);
+}
+
+/* Botão de histórico */
+.rfid-action-btn-info {
+  background: var(--rfid-info);
+  color: white;
+}
+
+.rfid-action-btn-info:hover {
+  background: #138496;
+  transform: translateY(-1px);
+}
+
+/* Ações */
+.rfid-actions {
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.rfid-action-btn {
+  font-size: 0.8rem;
+  padding: 6px 10px;
+  min-width: 70px;
+}
+
+/* Modal de foto - versão maior */
+.modal-large {
+  max-width: 90vw;
+  max-height: 90vh;
+  width: 800px;
+}
+
+.modal-large .modal-body {
+  max-height: calc(90vh - 120px);
+  overflow-y: auto;
+}
+
+/* Visualizador de foto */
+.foto-viewer {
+  margin-top: 20px;
+  text-align: center;
+}
+
+.foto-etiqueta {
+  max-width: 100%;
+  max-height: 60vh;
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  transition: transform 0.3s ease;
+}
+
+.foto-etiqueta:hover {
+  transform: scale(1.02);
+  cursor: zoom-in;
+}
+
+/* Controles da foto */
+.foto-controls {
+  margin-top: 15px;
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.foto-controls .rfid-btn {
+  min-width: 120px;
+}
+
+/* Erro na foto */
+.foto-erro {
+  padding: 40px;
+  text-align: center;
+  color: var(--rfid-muted);
+}
+
+.foto-erro i {
+  font-size: 3rem;
+  color: var(--rfid-warning);
+  margin-bottom: 15px;
+}
+
+.foto-erro i.fa-image {
+  color: var(--rfid-info);
+}
+
+.foto-erro i.fa-exclamation-triangle {
+  color: var(--rfid-danger);
+}
+
+.foto-erro p {
+  margin: 15px 0 5px 0;
+  font-size: 1.1rem;
+  font-weight: 500;
+}
+
+.foto-erro small {
+  display: block;
+  margin-bottom: 20px;
+  color: var(--rfid-muted);
+  font-size: 0.9rem;
+}
+
+/* Informações da foto */
+.foto-info {
+  background: #f8f9fa;
+  padding: 15px;
+  border-radius: 8px;
+  margin-bottom: 10px;
+}
+
+.foto-info h4 {
+  margin: 0 0 8px 0;
+  color: var(--rfid-primary);
+}
+
+.foto-info p {
+  margin: 0;
+  color: var(--rfid-muted);
+  font-size: 0.9rem;
+}
+
+/* Animação de atualização */
+.updating {
+  position: relative;
+  overflow: hidden;
+}
+
+.updating::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, 
+    transparent, 
+    rgba(0, 123, 255, 0.1), 
+    transparent
+  );
+  animation: updating-sweep 1.5s infinite;
+}
+
+@keyframes updating-sweep {
+  0% { left: -100%; }
+  100% { left: 100%; }
+}
+
+/* Indicador de PING recente */
+.ping-recente {
+  animation: pulse-highlight 2s ease-out;
+}
+
+@keyframes pulse-highlight {
+  0% {
+    background-color: rgba(23, 162, 184, 0.2);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+/* Responsividade */
+@media (max-width: 768px) {
+  .rfid-table th:nth-child(4),
+  .rfid-table td:nth-child(4) {
+    display: none; /* Esconder RSSI em mobile */
+  }
+  
+  .rfid-actions {
+    flex-direction: column;
+    gap: 3px;
+  }
+  
+  .rfid-action-btn {
+    font-size: 0.75rem;
+    padding: 5px 8px;
+    min-width: 60px;
+  }
+  
+  .historico-details {
+    flex-direction: column;
+    gap: 5px;
+    align-items: flex-start;
+  }
+  
+  .modal-large {
+    width: 95vw;
+    max-width: 95vw;
+  }
+  
+  .foto-controls {
+    flex-direction: column;
+    align-items: center;
+  }
+  
+  .foto-controls .rfid-btn {
+    width: 100%;
+    max-width: 200px;
+  }
+}
+
+@media (max-width: 480px) {
+  .antena-badge {
+    font-size: 0.75em;
+    padding: 3px 6px;
+  }
+  
+  .ping-badge {
+    font-size: 0.75em;
+    padding: 3px 6px;
+  }
+}
