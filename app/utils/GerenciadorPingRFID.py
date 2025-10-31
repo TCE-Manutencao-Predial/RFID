@@ -114,20 +114,8 @@ class GerenciadorPingRFID:
                 cached_result['from_cache'] = True
                 return cached_result
         
-        total = None
-        total_from_cache = False
+        total = 0
         pings = []
-        # Reutiliza a contagem total por filtro para evitar COUNT repetidos
-        total_cache_key = self._get_cache_key('pings_total', {
-            'filtros': filtros or {}
-        })
-
-        if not force_refresh:
-            cached_total = self._get_from_cache(total_cache_key)
-            if cached_total and isinstance(cached_total, dict):
-                total = cached_total.get('total')
-                if total is not None:
-                    total_from_cache = True
         
         try:
             # Construir query base - FILTROS ESPECÍFICOS PARA PING
@@ -137,9 +125,8 @@ class GerenciadorPingRFID:
             # Filtro principal: EtiquetaRFID_hex começa com 'PING_PERIODICO_'
             where_conditions.append("l.EtiquetaRFID_hex LIKE 'PING_PERIODICO_%'")
             
-            # Filtro principal: Foto deve existir e ter tamanho > 0
+            # Filtro principal: Foto deve existir
             where_conditions.append("l.Foto IS NOT NULL")
-            where_conditions.append("LENGTH(l.Foto) > 0")
 
             # Filtros adicionais do usuário
             if filtros:
@@ -178,51 +165,39 @@ class GerenciadorPingRFID:
 
             where_clause = " AND ".join(where_conditions)
 
+            # Usar uma única conexão com SQL_CALC_FOUND_ROWS para obter total e dados
             connection = None
             cursor = None
             try:
                 connection = self._get_connection()
                 cursor = connection.cursor(dictionary=True)
-
-                if total is None:
-                    count_query = f"""
-                        SELECT COUNT(*) as total
-                        FROM leitoresRFID l
-                        WHERE {where_clause}
-                    """
-                    count_params = params.copy()
-                    cursor.execute(count_query, count_params)
-                    result = cursor.fetchone()
-                    total = result['total'] if result and 'total' in result else 0
-                    self._set_cache(total_cache_key, {'total': total})
-
-                if total is None:
-                    total = 0
-
-                pings_raw = []
-                if total > 0 and offset < total:  # Evita SELECT inútil quando não há página disponível
-                    data_query = f"""
-                        SELECT 
-                            l.CodigoLeitor,
-                            l.Horario,
-                            l.Antena,
-                            l.EtiquetaRFID_hex,
-                            l.RSSI,
-                            CASE 
-                                WHEN l.Foto IS NOT NULL AND LENGTH(l.Foto) > 0 THEN 1 
-                                ELSE 0 
-                            END as TemFoto
-                        FROM leitoresRFID l
-                        WHERE {where_clause}
-                        ORDER BY l.Horario DESC
-                        LIMIT %s OFFSET %s
-                    """
-
-                    query_params = params.copy()
-                    query_params.extend([limite, offset])
-                    cursor.execute(data_query, query_params)
-                    pings_raw = cursor.fetchall()
-
+                
+                # Query para obter dados PING com contagem de total
+                data_query = f"""
+                    SELECT SQL_CALC_FOUND_ROWS
+                        l.CodigoLeitor,
+                        l.Horario,
+                        l.Antena,
+                        l.EtiquetaRFID_hex,
+                        l.RSSI,
+                        1 as TemFoto
+                    FROM leitoresRFID l
+                    WHERE {where_clause}
+                    ORDER BY l.Horario DESC
+                    LIMIT %s OFFSET %s
+                """
+                
+                query_params = params.copy()
+                query_params.extend([limite, offset])
+                
+                cursor.execute(data_query, query_params)
+                pings_raw = cursor.fetchall()
+                
+                # Obter total de registros
+                cursor.execute("SELECT FOUND_ROWS() as total")
+                total = cursor.fetchone()['total']
+                
+                # Processar registros
                 for ping in pings_raw:
                     ping_processado = {
                         'codigo_leitor': ping['CodigoLeitor'],
@@ -233,14 +208,15 @@ class GerenciadorPingRFID:
                         'rssi': ping['RSSI'],
                         'tem_foto': bool(ping['TemFoto'])
                     }
-
+                    
+                    # Formatar horário
                     if isinstance(ping['Horario'], datetime):
                         ping_processado['horario_formatado'] = ping['Horario'].strftime('%d/%m/%Y %H:%M:%S')
                     else:
                         ping_processado['horario_formatado'] = str(ping['Horario'])
-
+                    
                     pings.append(ping_processado)
-
+                
             except Exception as e:
                 self.logger.error(f"Erro ao buscar registros PING: {e}")
                 raise
@@ -256,8 +232,7 @@ class GerenciadorPingRFID:
                 'total': total,
                 'limite': limite,
                 'offset': offset,
-                'from_cache': False,
-                'total_from_cache': total_from_cache
+                'from_cache': False
             }
             
             # Armazenar no cache
@@ -272,8 +247,7 @@ class GerenciadorPingRFID:
                 'error': str(e),
                 'pings': [],
                 'total': 0,
-                'from_cache': False,
-                'total_from_cache': False
+                'from_cache': False
             }
     
     def obter_estatisticas_pings(self, filtros=None, force_refresh=False):
@@ -310,7 +284,6 @@ class GerenciadorPingRFID:
                 # Filtros principais
                 where_conditions.append("l.EtiquetaRFID_hex LIKE 'PING_PERIODICO_%'")
                 where_conditions.append("l.Foto IS NOT NULL")
-                where_conditions.append("LENGTH(l.Foto) > 0")
                 
                 # Aplicar filtros adicionais
                 if filtros:
@@ -332,7 +305,7 @@ class GerenciadorPingRFID:
                         COUNT(DISTINCT CONCAT(l.CodigoLeitor, ':', l.Antena)) as total_antenas,
                         MIN(l.Horario) as primeiro_ping,
                         MAX(l.Horario) as ultimo_ping,
-                        SUM(CASE WHEN l.Foto IS NOT NULL AND LENGTH(l.Foto) > 0 THEN 1 ELSE 0 END) as pings_com_foto
+                        COUNT(*) as pings_com_foto
                     FROM leitoresRFID l
                     WHERE {where_clause}
                 """
@@ -393,15 +366,11 @@ class GerenciadorPingRFID:
                     Horario,
                     Antena,
                     RSSI,
-                    CASE 
-                        WHEN Foto IS NOT NULL AND LENGTH(Foto) > 0 THEN 1 
-                        ELSE 0 
-                    END as TemFoto
+                    1 as TemFoto
                 FROM leitoresRFID
                 WHERE EtiquetaRFID_hex = %s 
                   AND EtiquetaRFID_hex LIKE 'PING_PERIODICO_%'
                   AND Foto IS NOT NULL
-                  AND LENGTH(Foto) > 0
                 ORDER BY Horario DESC
                 LIMIT %s
             """

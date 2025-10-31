@@ -53,19 +53,12 @@ function showToast(message, type = "info", title = "") {
 }
 
 // Inicialização
-document.addEventListener("DOMContentLoaded", async function () {
+document.addEventListener("DOMContentLoaded", function () {
   inicializarEventos();
-
-  try {
-    await Promise.all([
-      carregarAntenas(),
-      carregarDados(),
-      carregarEstatisticas(),
-    ]);
-  } catch (error) {
-    console.error("Erro ao carregar dados iniciais:", error);
-    showToast("Não foi possível carregar todos os dados iniciais", "warning");
-  }
+  carregarAntenas();
+  carregarDados();
+  // Carregar estatísticas APÓS os dados principais para não bloquear
+  setTimeout(() => carregarEstatisticas(), 100);
 });
 
 function inicializarEventos() {
