@@ -445,12 +445,15 @@ async function verFotoPing(codigo, codigoLeitor, antena, horario) {
     document.getElementById("fotoEtiquetaCodigo").textContent = codigo;
     document.getElementById("fotoEtiquetaInfo").textContent = "Verificando disponibilidade...";
     
-    // Mostrar loading
+    // Mostrar loading e limpar controles
     const fotoContainer = document.getElementById("fotoContainer");
     const fotoLoading = document.getElementById("fotoLoading");
+    const controlsCompact = document.getElementById("fotoControlsCompact");
     
     fotoContainer.innerHTML = '';
     fotoLoading.style.display = "block";
+    controlsCompact.style.display = "none";
+    controlsCompact.innerHTML = '';
     
     // Abrir modal
     abrirModal("modalFoto");
@@ -479,6 +482,9 @@ async function verFotoPing(codigo, codigoLeitor, antena, horario) {
         document.getElementById("fotoEtiquetaInfo").textContent = 
           `Leitor: ${codigoLeitor} | Antena: ${antena} | Horário: ${new Date(horario).toLocaleString('pt-BR')}`;
         
+        // Esconder controles quando não há foto
+        document.getElementById("fotoControlsCompact").style.display = "none";
+        
         fotoContainer.innerHTML = `
           <div class="foto-erro">
             <i class="fas fa-image"></i>
@@ -497,6 +503,23 @@ async function verFotoPing(codigo, codigoLeitor, antena, horario) {
     document.getElementById("fotoEtiquetaInfo").textContent = 
       `Leitor: ${codigoLeitor} | Antena: ${antena} | Horário: ${new Date(horario).toLocaleString('pt-BR')}`;
     
+    // Mostrar controles compactos
+    controlsCompact.style.display = "grid";
+    controlsCompact.innerHTML = `
+      <button class="rfid-btn rfid-btn-secondary" onclick="navegarFoto('${codigo}', '${codigoLeitor}', '${antena}', '${horario}', 'anterior')">
+        <i class="fas fa-chevron-left"></i> Anterior
+      </button>
+      <button class="rfid-btn rfid-btn-secondary" onclick="navegarFoto('${codigo}', '${codigoLeitor}', '${antena}', '${horario}', 'proximo')">
+        Próximo <i class="fas fa-chevron-right"></i>
+      </button>
+      <button class="rfid-btn rfid-btn-secondary" onclick="downloadFoto('${codigo}', '${codigoLeitor}', '${antena}', '${horario}')">
+        <i class="fas fa-download"></i> Baixar
+      </button>
+      <button class="rfid-btn rfid-btn-secondary" onclick="abrirFotoNovaAba('${fotoUrl}')">
+        <i class="fas fa-external-link-alt"></i> Nova Aba
+      </button>
+    `;
+    
     // Verificar se a resposta é uma imagem
     const contentType = fotoResponse.headers.get('content-type');
     if (!contentType || !contentType.startsWith('image/')) {
@@ -511,22 +534,6 @@ async function verFotoPing(codigo, codigoLeitor, antena, horario) {
     img.onload = function() {
       fotoLoading.style.display = "none";
       fotoContainer.innerHTML = `
-        <div class="foto-navigation">
-          <button class="rfid-btn rfid-btn-secondary" onclick="navegarFoto('${codigo}', '${codigoLeitor}', '${antena}', '${horario}', 'anterior')">
-            <i class="fas fa-chevron-left"></i> Anterior
-          </button>
-          <button class="rfid-btn rfid-btn-secondary" onclick="navegarFoto('${codigo}', '${codigoLeitor}', '${antena}', '${horario}', 'proximo')">
-            Próximo <i class="fas fa-chevron-right"></i>
-          </button>
-        </div>
-        <div class="foto-controls">
-          <button class="rfid-btn rfid-btn-secondary" onclick="downloadFoto('${codigo}', '${codigoLeitor}', '${antena}', '${horario}')">
-            <i class="fas fa-download"></i> Baixar
-          </button>
-          <button class="rfid-btn rfid-btn-secondary" onclick="abrirFotoNovaAba('${fotoUrl}')">
-            <i class="fas fa-external-link-alt"></i> Nova Aba
-          </button>
-        </div>
         <img src="${imageUrl}" alt="Foto do PING ${codigo}" class="foto-etiqueta" />
       `;
     };
@@ -540,6 +547,8 @@ async function verFotoPing(codigo, codigoLeitor, antena, horario) {
           <small>A imagem pode estar corrompida ou em um formato não suportado.</small>
         </div>
       `;
+      // Esconder controles se houver erro
+      document.getElementById("fotoControlsCompact").style.display = "none";
     };
     
     img.src = imageUrl;
@@ -558,6 +567,9 @@ async function verFotoPing(codigo, codigoLeitor, antena, horario) {
         <small>${error.message}</small>
       </div>
     `;
+    
+    // Esconder controles em caso de erro
+    document.getElementById("fotoControlsCompact").style.display = "none";
     
     showToast(`Erro ao carregar foto: ${error.message}`, "error");
   }

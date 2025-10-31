@@ -215,9 +215,18 @@
           </button>
         </div>
         <div class="modal-body">
-          <div class="foto-info">
-            <h4>Código PING: <span id="fotoEtiquetaCodigo" class="rfid-etiqueta"></span></h4>
-            <p id="fotoEtiquetaInfo">Carregando informações...</p>
+          <div class="foto-header-compact">
+            <div class="foto-info-compact">
+              <div class="foto-info-line">
+                <strong>Código PING:</strong> <span id="fotoEtiquetaCodigo" class="rfid-etiqueta"></span>
+              </div>
+              <div class="foto-info-line" id="fotoEtiquetaInfo">
+                Carregando informações...
+              </div>
+            </div>
+            <div class="foto-controls-compact" id="fotoControlsCompact" style="display: none;">
+              <!-- Controles serão inseridos aqui via JavaScript -->
+            </div>
           </div>
 
           <div class="foto-viewer">
@@ -237,6 +246,6 @@
     </div>
 
     <!-- JavaScript -->
-    <script src="{{ url_for('static', filename='js/ping.js') }}?v=20251031"></script>
+    <script src="{{ url_for('static', filename='js/ping.js') }}?v=20251031b"></script>
   </body>
 </html>
