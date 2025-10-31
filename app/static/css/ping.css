@@ -217,27 +217,14 @@
   cursor: zoom-in;
 }
 
-/* Controles da foto */
-.foto-controls {
-  margin-top: 15px;
-  display: flex;
-  gap: 10px;
-  justify-content: center;
-  flex-wrap: wrap;
-}
-
-.foto-controls .rfid-btn {
-  min-width: 120px;
-}
-
 /* Navegação da foto */
 .foto-navigation {
-  margin-top: 15px;
+  margin-bottom: 15px;
   display: flex;
   gap: 10px;
   justify-content: space-between;
-  padding-top: 15px;
-  border-top: 1px solid #dee2e6;
+  padding-bottom: 15px;
+  border-bottom: 1px solid #dee2e6;
 }
 
 .foto-navigation .rfid-btn {
@@ -246,6 +233,19 @@
   align-items: center;
   justify-content: center;
   gap: 8px;
+}
+
+/* Controles da foto */
+.foto-controls {
+  margin-bottom: 15px;
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.foto-controls .rfid-btn {
+  min-width: 120px;
 }
 
 /* Erro na foto */

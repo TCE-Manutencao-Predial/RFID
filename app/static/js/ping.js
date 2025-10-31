@@ -513,15 +513,6 @@ async function verFotoPing(codigo, codigoLeitor, antena, horario) {
     img.onload = function() {
       fotoLoading.style.display = "none";
       fotoContainer.innerHTML = `
-        <img src="${imageUrl}" alt="Foto do PING ${codigo}" class="foto-etiqueta" />
-        <div class="foto-controls">
-          <button class="rfid-btn rfid-btn-secondary" onclick="downloadFoto('${codigo}', '${codigoLeitor}', '${antena}', '${horario}')">
-            <i class="fas fa-download"></i> Baixar
-          </button>
-          <button class="rfid-btn rfid-btn-secondary" onclick="abrirFotoNovaAba('${fotoUrl}')">
-            <i class="fas fa-external-link-alt"></i> Nova Aba
-          </button>
-        </div>
         <div class="foto-navigation">
           <button class="rfid-btn rfid-btn-secondary" onclick="navegarFoto('${codigo}', '${codigoLeitor}', '${antena}', '${horario}', 'anterior')">
             <i class="fas fa-chevron-left"></i> Anterior
@@ -530,6 +521,15 @@ async function verFotoPing(codigo, codigoLeitor, antena, horario) {
             Próximo <i class="fas fa-chevron-right"></i>
           </button>
         </div>
+        <div class="foto-controls">
+          <button class="rfid-btn rfid-btn-secondary" onclick="downloadFoto('${codigo}', '${codigoLeitor}', '${antena}', '${horario}')">
+            <i class="fas fa-download"></i> Baixar
+          </button>
+          <button class="rfid-btn rfid-btn-secondary" onclick="abrirFotoNovaAba('${fotoUrl}')">
+            <i class="fas fa-external-link-alt"></i> Nova Aba
+          </button>
+        </div>
+        <img src="${imageUrl}" alt="Foto do PING ${codigo}" class="foto-etiqueta" />
       `;
     };
     
@@ -587,17 +587,23 @@ function abrirFotoNovaAba(url) {
 // Função para navegar entre fotos (anterior/próximo)
 async function navegarFoto(codigoAtual, codigoLeitorAtual, antenaAtual, horarioAtual, direcao) {
   try {
-    // Buscar dados da tabela atual
-    const tbody = document.querySelector('#tablePing tbody');
+    // Buscar dados da tabela atual - ID correto é tabelaCorpo
+    const tbody = document.getElementById('tabelaCorpo');
+    if (!tbody) {
+      showToast("Tabela não encontrada", "error");
+      return;
+    }
+    
     const rows = Array.from(tbody.querySelectorAll('tr'));
     
     // Encontrar a linha atual
+    // Estrutura: [Horário, Código Leitor, Antena, PING Badge, RSSI, Foto, Ações]
     let indiceAtual = -1;
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i];
+      const horario = row.cells[0]?.getAttribute('data-horario') || row.cells[0]?.textContent.trim();
       const leitor = row.cells[1]?.textContent.trim();
-      const antena = row.cells[2]?.textContent.trim();
-      const horario = row.cells[3]?.getAttribute('data-horario') || row.cells[3]?.textContent.trim();
+      const antena = row.cells[2]?.querySelector('.antena-badge')?.textContent.trim();
       
       if (leitor === codigoLeitorAtual && antena === antenaAtual && 
           (horario === horarioAtual || new Date(horario).getTime() === new Date(horarioAtual).getTime())) {
@@ -629,10 +635,10 @@ async function navegarFoto(codigoAtual, codigoLeitorAtual, antenaAtual, horarioA
     
     // Obter dados da próxima linha
     const proximaRow = rows[proximoIndice];
-    const proximoCodigo = proximaRow.cells[0]?.textContent.trim();
+    const proximoHorario = proximaRow.cells[0]?.getAttribute('data-horario') || proximaRow.cells[0]?.textContent.trim();
     const proximoLeitor = proximaRow.cells[1]?.textContent.trim();
-    const proximaAntena = proximaRow.cells[2]?.textContent.trim();
-    const proximoHorario = proximaRow.cells[3]?.getAttribute('data-horario') || proximaRow.cells[3]?.textContent.trim();
+    const proximaAntena = proximaRow.cells[2]?.querySelector('.antena-badge')?.textContent.trim();
+    const proximoCodigo = proximaRow.cells[3]?.querySelector('.ping-badge')?.textContent.trim();
     
     // Carregar foto do próximo PING
     await verFotoPing(proximoCodigo, proximoLeitor, proximaAntena, proximoHorario);
