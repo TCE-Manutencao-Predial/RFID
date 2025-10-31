@@ -36,13 +36,12 @@ WHERE table_schema = DATABASE()
   AND index_name = 'idx_ping_optimized';
 
 -- Criar índice otimizado (executar apenas se não existir)
+-- IMPORTANTE: Removemos a condição WHERE Foto IS NOT NULL pois causava scan de BLOB
 CREATE INDEX idx_ping_optimized 
-ON leitoresRFID (EtiquetaRFID_hex(20), Horario DESC, CodigoLeitor, Antena)
-WHERE Foto IS NOT NULL;
+ON leitoresRFID (EtiquetaRFID_hex(20), Horario DESC, CodigoLeitor, Antena);
 
--- Nota: Se o MySQL não suportar índices parciais (WHERE), usar:
--- CREATE INDEX idx_ping_optimized 
--- ON leitoresRFID (EtiquetaRFID_hex(20), Horario DESC, CodigoLeitor, Antena);
+-- Nota: Índices parciais com WHERE não são suportados em MySQL/MariaDB
+-- Por isso usamos apenas as colunas sem filtro adicional
 
 -- ============================================================================
 -- ÍNDICE ADICIONAL PARA ESTATÍSTICAS
@@ -72,7 +71,6 @@ SELECT
     l.RSSI
 FROM leitoresRFID l
 WHERE l.EtiquetaRFID_hex LIKE 'PING_PERIODICO_%'
-  AND l.Foto IS NOT NULL
 ORDER BY l.Horario DESC
 LIMIT 50 OFFSET 0;
 
@@ -86,10 +84,11 @@ SELECT
     COUNT(DISTINCT CONCAT(CodigoLeitor, ':', Antena)) as antenas_unicas,
     MIN(Horario) as primeiro_ping,
     MAX(Horario) as ultimo_ping,
-    AVG(LENGTH(Foto)) as tamanho_medio_foto_bytes
+    AVG(CASE WHEN Foto IS NOT NULL THEN LENGTH(Foto) ELSE 0 END) as tamanho_medio_foto_bytes,
+    SUM(CASE WHEN Foto IS NOT NULL THEN 1 ELSE 0 END) as pings_com_foto,
+    SUM(CASE WHEN Foto IS NULL THEN 1 ELSE 0 END) as pings_sem_foto
 FROM leitoresRFID
-WHERE EtiquetaRFID_hex LIKE 'PING_PERIODICO_%'
-  AND Foto IS NOT NULL;
+WHERE EtiquetaRFID_hex LIKE 'PING_PERIODICO_%';
 
 -- ============================================================================
 -- MANUTENÇÃO DOS ÍNDICES
