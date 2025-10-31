@@ -64,6 +64,36 @@ class GerenciadorPingRFID:
         self.cache.clear()
         self.logger.info("Cache limpo")
     
+    def _converter_horario_para_sql(self, horario):
+        """
+        Converte horário de diversos formatos para formato SQL.
+        
+        Args:
+            horario: String com horário em formato HTTP (GMT) ou SQL
+            
+        Returns:
+            str: Horário em formato SQL (YYYY-MM-DD HH:MM:SS)
+        """
+        from email.utils import parsedate_to_datetime
+        
+        try:
+            # Se já está em formato SQL, retornar direto
+            if isinstance(horario, str) and '-' in horario and ':' in horario:
+                # Formato: 2025-10-31 11:32:26 ou 2025-10-31T11:32:26
+                return horario.replace('T', ' ').split('.')[0]  # Remove microsegundos se houver
+            
+            # Se está em formato HTTP/GMT: "Fri, 31 Oct 2025 11:32:26 GMT"
+            if 'GMT' in str(horario) or ',' in str(horario):
+                dt = parsedate_to_datetime(horario)
+                return dt.strftime('%Y-%m-%d %H:%M:%S')
+            
+            # Fallback: retornar como está
+            return str(horario)
+            
+        except Exception as e:
+            self.logger.warning(f"Erro ao converter horário '{horario}': {e}. Usando como está.")
+            return str(horario)
+    
     def _get_connection(self):
         """Cria e retorna uma conexão com o MySQL com timeouts agressivos."""
         try:
@@ -581,7 +611,7 @@ class GerenciadorPingRFID:
         Args:
             codigo_leitor (str): Código do leitor (preferencial)
             antena (str): Número da antena (preferencial)
-            horario (str): Horário do PING (preferencial)
+            horario (str): Horário do PING (preferencial, pode ser formato HTTP GMT ou SQL)
             etiqueta_hex (str): Código da etiqueta (fallback - pega mais recente)
             
         Returns:
@@ -593,6 +623,9 @@ class GerenciadorPingRFID:
             
             # Priorizar busca por CodigoLeitor + Antena + Horario (identificação única)
             if codigo_leitor and antena and horario:
+                # Converter horário para formato SQL
+                horario_sql = self._converter_horario_para_sql(horario)
+                
                 query = """
                     SELECT Foto, Horario, CodigoLeitor, Antena, EtiquetaRFID_hex
                     FROM leitoresRFID
@@ -603,7 +636,7 @@ class GerenciadorPingRFID:
                       AND Foto IS NOT NULL
                     LIMIT 1
                 """
-                cursor.execute(query, (codigo_leitor, antena, horario))
+                cursor.execute(query, (codigo_leitor, antena, horario_sql))
             
             # Fallback: buscar por etiqueta (pega mais recente)
             elif etiqueta_hex:
@@ -628,7 +661,7 @@ class GerenciadorPingRFID:
             self.logger.info(f"=== OBTER FOTO PING - Query SQL ===")
             self.logger.info(f"Query: {query}")
             if codigo_leitor and antena and horario:
-                self.logger.info(f"Params: codigo_leitor={codigo_leitor}, antena={antena}, horario={horario}")
+                self.logger.info(f"Params: codigo_leitor={codigo_leitor}, antena={antena}, horario_sql={horario_sql} (original: {horario})")
             elif etiqueta_hex:
                 self.logger.info(f"Params: etiqueta_hex={etiqueta_hex}")
             self.logger.info(f"===================================")
@@ -667,6 +700,7 @@ class GerenciadorPingRFID:
     def verificar_foto_ping(self, codigo_leitor=None, antena=None, horario=None, etiqueta_hex=None):
         """
         Verifica se um PING possui foto disponível.
+        SIMPLIFICADO: apenas verifica se existe, não conta estatísticas.
         
         Args:
             codigo_leitor (str): Código do leitor (preferencial)
@@ -683,29 +717,36 @@ class GerenciadorPingRFID:
             
             # Priorizar busca por CodigoLeitor + Antena + Horario
             if codigo_leitor and antena and horario:
+                # Converter horário se vier em formato HTTP (GMT)
+                horario_sql = self._converter_horario_para_sql(horario)
+                
+                # Query SIMPLIFICADA: apenas verifica existência
                 query = """
                     SELECT 
-                        COUNT(*) as total_fotos,
-                        MAX(Horario) as ultima_foto,
-                        SUM(CASE WHEN Foto IS NOT NULL THEN 1 ELSE 0 END) as fotos_disponiveis
+                        1 as tem_foto,
+                        Horario as ultima_foto
                     FROM leitoresRFID
                     WHERE CodigoLeitor = %s
                       AND Antena = %s
                       AND Horario = %s
                       AND EtiquetaRFID_hex LIKE 'PING_PERIODICO_%'
+                      AND Foto IS NOT NULL
+                    LIMIT 1
                 """
-                cursor.execute(query, (codigo_leitor, antena, horario))
+                cursor.execute(query, (codigo_leitor, antena, horario_sql))
             
-            # Fallback: buscar por etiqueta
+            # Fallback: buscar por etiqueta (pega mais recente)
             elif etiqueta_hex:
                 query = """
                     SELECT 
-                        COUNT(*) as total_fotos,
-                        MAX(Horario) as ultima_foto,
-                        SUM(CASE WHEN Foto IS NOT NULL THEN 1 ELSE 0 END) as fotos_disponiveis
+                        1 as tem_foto,
+                        Horario as ultima_foto
                     FROM leitoresRFID
                     WHERE EtiquetaRFID_hex = %s 
                       AND EtiquetaRFID_hex LIKE 'PING_PERIODICO_%'
+                      AND Foto IS NOT NULL
+                    ORDER BY Horario DESC
+                    LIMIT 1
                 """
                 cursor.execute(query, (etiqueta_hex,))
             
@@ -719,19 +760,19 @@ class GerenciadorPingRFID:
             self.logger.info(f"=== VERIFICAR FOTO PING - Query SQL ===")
             self.logger.info(f"Query: {query}")
             if codigo_leitor and antena and horario:
-                self.logger.info(f"Params: codigo_leitor={codigo_leitor}, antena={antena}, horario={horario}")
+                self.logger.info(f"Params: codigo_leitor={codigo_leitor}, antena={antena}, horario_original={horario}, horario_sql={horario_sql if 'horario_sql' in locals() else horario}")
             elif etiqueta_hex:
                 self.logger.info(f"Params: etiqueta_hex={etiqueta_hex}")
             self.logger.info(f"========================================")
             
             resultado = cursor.fetchone()
             
-            tem_foto = resultado['fotos_disponiveis'] > 0 if resultado else False
+            tem_foto = resultado is not None
             
             return {
                 'success': True,
                 'tem_foto': tem_foto,
-                'total_fotos': resultado['total_fotos'] if resultado else 0,
+                'total_fotos': 1 if tem_foto else 0,
                 'ultima_foto': resultado['ultima_foto'] if resultado else None,
                 'codigo_leitor': codigo_leitor,
                 'antena': antena,
