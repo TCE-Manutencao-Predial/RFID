@@ -114,8 +114,20 @@ class GerenciadorPingRFID:
                 cached_result['from_cache'] = True
                 return cached_result
         
-        total = 0
+        total = None
+        total_from_cache = False
         pings = []
+        # Reutiliza a contagem total por filtro para evitar COUNT repetidos
+        total_cache_key = self._get_cache_key('pings_total', {
+            'filtros': filtros or {}
+        })
+
+        if not force_refresh:
+            cached_total = self._get_from_cache(total_cache_key)
+            if cached_total and isinstance(cached_total, dict):
+                total = cached_total.get('total')
+                if total is not None:
+                    total_from_cache = True
         
         try:
             # Construir query base - FILTROS ESPECÍFICOS PARA PING
@@ -166,63 +178,51 @@ class GerenciadorPingRFID:
 
             where_clause = " AND ".join(where_conditions)
 
-            # PRIMEIRA CONEXÃO: Obter o total
-            connection1 = None
-            cursor1 = None
+            connection = None
+            cursor = None
             try:
-                connection1 = self._get_connection()
-                cursor1 = connection1.cursor(dictionary=True)
-                
-                count_query = f"""
-                    SELECT COUNT(*) as total
-                    FROM leitoresRFID l
-                    WHERE {where_clause}
-                """
-                cursor1.execute(count_query, params)
-                result = cursor1.fetchone()
-                total = result['total'] if result and 'total' in result else 0
-                
-            except Exception as e:
-                self.logger.error(f"Erro ao contar registros PING: {e}")
-                raise
-            finally:
-                if cursor1:
-                    cursor1.close()
-                if connection1:
-                    connection1.close()
-            
-            # SEGUNDA CONEXÃO: Obter os registros
-            connection2 = None
-            cursor2 = None
-            try:
-                connection2 = self._get_connection()
-                cursor2 = connection2.cursor(dictionary=True)
-                
-                # Query para obter dados PING
-                data_query = f"""
-                    SELECT 
-                        l.CodigoLeitor,
-                        l.Horario,
-                        l.Antena,
-                        l.EtiquetaRFID_hex,
-                        l.RSSI,
-                        CASE 
-                            WHEN l.Foto IS NOT NULL AND LENGTH(l.Foto) > 0 THEN 1 
-                            ELSE 0 
-                        END as TemFoto
-                    FROM leitoresRFID l
-                    WHERE {where_clause}
-                    ORDER BY l.Horario DESC
-                    LIMIT %s OFFSET %s
-                """
-                
-                query_params = params.copy()
-                query_params.extend([limite, offset])
-                
-                cursor2.execute(data_query, query_params)
-                pings_raw = cursor2.fetchall()
-                
-                # Processar registros
+                connection = self._get_connection()
+                cursor = connection.cursor(dictionary=True)
+
+                if total is None:
+                    count_query = f"""
+                        SELECT COUNT(*) as total
+                        FROM leitoresRFID l
+                        WHERE {where_clause}
+                    """
+                    count_params = params.copy()
+                    cursor.execute(count_query, count_params)
+                    result = cursor.fetchone()
+                    total = result['total'] if result and 'total' in result else 0
+                    self._set_cache(total_cache_key, {'total': total})
+
+                if total is None:
+                    total = 0
+
+                pings_raw = []
+                if total > 0 and offset < total:  # Evita SELECT inútil quando não há página disponível
+                    data_query = f"""
+                        SELECT 
+                            l.CodigoLeitor,
+                            l.Horario,
+                            l.Antena,
+                            l.EtiquetaRFID_hex,
+                            l.RSSI,
+                            CASE 
+                                WHEN l.Foto IS NOT NULL AND LENGTH(l.Foto) > 0 THEN 1 
+                                ELSE 0 
+                            END as TemFoto
+                        FROM leitoresRFID l
+                        WHERE {where_clause}
+                        ORDER BY l.Horario DESC
+                        LIMIT %s OFFSET %s
+                    """
+
+                    query_params = params.copy()
+                    query_params.extend([limite, offset])
+                    cursor.execute(data_query, query_params)
+                    pings_raw = cursor.fetchall()
+
                 for ping in pings_raw:
                     ping_processado = {
                         'codigo_leitor': ping['CodigoLeitor'],
@@ -233,23 +233,22 @@ class GerenciadorPingRFID:
                         'rssi': ping['RSSI'],
                         'tem_foto': bool(ping['TemFoto'])
                     }
-                    
-                    # Formatar horário
+
                     if isinstance(ping['Horario'], datetime):
                         ping_processado['horario_formatado'] = ping['Horario'].strftime('%d/%m/%Y %H:%M:%S')
                     else:
                         ping_processado['horario_formatado'] = str(ping['Horario'])
-                    
+
                     pings.append(ping_processado)
-                
+
             except Exception as e:
                 self.logger.error(f"Erro ao buscar registros PING: {e}")
                 raise
             finally:
-                if cursor2:
-                    cursor2.close()
-                if connection2:
-                    connection2.close()
+                if cursor:
+                    cursor.close()
+                if connection:
+                    connection.close()
             
             result = {
                 'success': True,
@@ -257,7 +256,8 @@ class GerenciadorPingRFID:
                 'total': total,
                 'limite': limite,
                 'offset': offset,
-                'from_cache': False
+                'from_cache': False,
+                'total_from_cache': total_from_cache
             }
             
             # Armazenar no cache
@@ -272,7 +272,8 @@ class GerenciadorPingRFID:
                 'error': str(e),
                 'pings': [],
                 'total': 0,
-                'from_cache': False
+                'from_cache': False,
+                'total_from_cache': False
             }
     
     def obter_estatisticas_pings(self, filtros=None, force_refresh=False):
