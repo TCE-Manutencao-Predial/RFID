@@ -230,6 +230,24 @@
   min-width: 120px;
 }
 
+/* Navegação da foto */
+.foto-navigation {
+  margin-top: 15px;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  padding-top: 15px;
+  border-top: 1px solid #dee2e6;
+}
+
+.foto-navigation .rfid-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
 /* Erro na foto */
 .foto-erro {
   padding: 40px;

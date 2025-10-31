@@ -256,9 +256,10 @@ function renderizarTabela(pings) {
       : '';
 
     tr.innerHTML = `
-      <td>${ping.horario_formatado || ping.horario}</td>
+      <td data-horario="${ping.horario}">${ping.horario_formatado || ping.horario}</td>
+      <td>${ping.codigo_leitor}</td>
+      <td><span class="antena-badge">${ping.antena}</span></td>
       <td><span class="ping-badge">${ping.etiqueta_hex}</span></td>
-      <td><span class="antena-badge">${antenaDisplay}</span></td>
       <td>${rssiIndicator}</td>
       <td>${fotoIndicador}</td>
       <td>
@@ -463,49 +464,70 @@ async function verFotoPing(codigo, codigoLeitor, antena, horario) {
       horario: horario
     });
 
-    // Verificar se o PING tem foto
-    const infoResponse = await fetch(`/RFID/api/ping/foto/info/${codigo}?${params}`);
+    // Carregar a foto diretamente
+    const fotoUrl = `/RFID/api/ping/foto/${codigo}?${params}&t=${Date.now()}`;
     
-    if (!infoResponse.ok) {
-      throw new Error(`Erro HTTP: ${infoResponse.status}`);
-    }
+    const fotoResponse = await fetch(fotoUrl);
     
-    const infoData = await infoResponse.json();
-    
-    if (!infoData.success) {
-      throw new Error(infoData.error || "Erro ao verificar foto");
+    if (!fotoResponse.ok) {
+      // Tentar obter detalhes do erro
+      const errorData = await fotoResponse.json().catch(() => null);
+      
+      fotoLoading.style.display = "none";
+      
+      // Verificar tipo de erro específico
+      if (errorData && errorData.error_type === 'no_photo') {
+        // Foto vazia no banco de dados
+        document.getElementById("fotoEtiquetaInfo").textContent = 
+          `Leitor: ${codigoLeitor} | Antena: ${antena} | Horário: ${new Date(horario).toLocaleString('pt-BR')}`;
+        
+        fotoContainer.innerHTML = `
+          <div class="foto-erro">
+            <i class="fas fa-image"></i>
+            <p>Sem imagem no Banco de Dados</p>
+            <small>Este PING foi registrado, mas não possui foto armazenada.</small>
+          </div>
+        `;
+        return;
+      }
+      
+      // Outros erros
+      throw new Error(errorData?.error || `Erro HTTP: ${fotoResponse.status}`);
     }
     
     // Atualizar informações da foto
     document.getElementById("fotoEtiquetaInfo").textContent = 
       `Leitor: ${codigoLeitor} | Antena: ${antena} | Horário: ${new Date(horario).toLocaleString('pt-BR')}`;
     
-    if (!infoData.tem_foto) {
-      fotoLoading.style.display = "none";
-      fotoContainer.innerHTML = `
-        <div class="foto-erro">
-          <i class="fas fa-image"></i>
-          <p>Este PING não possui foto disponível</p>
-          <small>Nenhuma foto foi encontrada nos registros deste PING.</small>
-        </div>
-      `;
-      return;
+    // Verificar se a resposta é uma imagem
+    const contentType = fotoResponse.headers.get('content-type');
+    if (!contentType || !contentType.startsWith('image/')) {
+      throw new Error('Resposta não é uma imagem válida');
     }
     
-    // Carregar a foto
-    const fotoUrl = `/RFID/api/ping/foto/${codigo}?${params}&t=${Date.now()}`;
+    // Criar blob da imagem
+    const blob = await fotoResponse.blob();
+    const imageUrl = URL.createObjectURL(blob);
     
     const img = new Image();
     img.onload = function() {
       fotoLoading.style.display = "none";
       fotoContainer.innerHTML = `
-        <img src="${fotoUrl}" alt="Foto do PING ${codigo}" class="foto-etiqueta" />
+        <img src="${imageUrl}" alt="Foto do PING ${codigo}" class="foto-etiqueta" />
         <div class="foto-controls">
           <button class="rfid-btn rfid-btn-secondary" onclick="downloadFoto('${codigo}', '${codigoLeitor}', '${antena}', '${horario}')">
             <i class="fas fa-download"></i> Baixar
           </button>
           <button class="rfid-btn rfid-btn-secondary" onclick="abrirFotoNovaAba('${fotoUrl}')">
             <i class="fas fa-external-link-alt"></i> Nova Aba
+          </button>
+        </div>
+        <div class="foto-navigation">
+          <button class="rfid-btn rfid-btn-secondary" onclick="navegarFoto('${codigo}', '${codigoLeitor}', '${antena}', '${horario}', 'anterior')">
+            <i class="fas fa-chevron-left"></i> Anterior
+          </button>
+          <button class="rfid-btn rfid-btn-secondary" onclick="navegarFoto('${codigo}', '${codigoLeitor}', '${antena}', '${horario}', 'proximo')">
+            Próximo <i class="fas fa-chevron-right"></i>
           </button>
         </div>
       `;
@@ -516,16 +538,13 @@ async function verFotoPing(codigo, codigoLeitor, antena, horario) {
       fotoContainer.innerHTML = `
         <div class="foto-erro">
           <i class="fas fa-exclamation-triangle"></i>
-          <p>Erro ao carregar a imagem</p>
+          <p>Erro ao renderizar a imagem</p>
           <small>A imagem pode estar corrompida ou em um formato não suportado.</small>
-          <button class="rfid-btn rfid-btn-primary" onclick="verFotoPing('${codigo}', '${codigoLeitor}', '${antena}', '${horario}')">
-            <i class="fas fa-redo"></i> Tentar Novamente
-          </button>
         </div>
       `;
     };
     
-    img.src = fotoUrl;
+    img.src = imageUrl;
     
   } catch (error) {
     console.error("Erro ao verificar foto:", error);
@@ -539,9 +558,6 @@ async function verFotoPing(codigo, codigoLeitor, antena, horario) {
         <i class="fas fa-exclamation-triangle"></i>
         <p>Erro ao carregar foto</p>
         <small>${error.message}</small>
-        <button class="rfid-btn rfid-btn-primary" onclick="verFotoPing('${codigo}', '${codigoLeitor}', '${antena}', '${horario}')">
-          <i class="fas fa-redo"></i> Tentar Novamente
-        </button>
       </div>
     `;
     
@@ -566,6 +582,65 @@ function downloadFoto(codigo, codigoLeitor, antena, horario) {
 
 function abrirFotoNovaAba(url) {
   window.open(url, '_blank');
+}
+
+// Função para navegar entre fotos (anterior/próximo)
+async function navegarFoto(codigoAtual, codigoLeitorAtual, antenaAtual, horarioAtual, direcao) {
+  try {
+    // Buscar dados da tabela atual
+    const tbody = document.querySelector('#tablePing tbody');
+    const rows = Array.from(tbody.querySelectorAll('tr'));
+    
+    // Encontrar a linha atual
+    let indiceAtual = -1;
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      const leitor = row.cells[1]?.textContent.trim();
+      const antena = row.cells[2]?.textContent.trim();
+      const horario = row.cells[3]?.getAttribute('data-horario') || row.cells[3]?.textContent.trim();
+      
+      if (leitor === codigoLeitorAtual && antena === antenaAtual && 
+          (horario === horarioAtual || new Date(horario).getTime() === new Date(horarioAtual).getTime())) {
+        indiceAtual = i;
+        break;
+      }
+    }
+    
+    if (indiceAtual === -1) {
+      showToast("Não foi possível localizar o PING atual na tabela", "warning");
+      return;
+    }
+    
+    // Calcular próximo índice
+    let proximoIndice;
+    if (direcao === 'anterior') {
+      proximoIndice = indiceAtual - 1;
+      if (proximoIndice < 0) {
+        showToast("Este é o primeiro PING da página", "info");
+        return;
+      }
+    } else {
+      proximoIndice = indiceAtual + 1;
+      if (proximoIndice >= rows.length) {
+        showToast("Este é o último PING da página", "info");
+        return;
+      }
+    }
+    
+    // Obter dados da próxima linha
+    const proximaRow = rows[proximoIndice];
+    const proximoCodigo = proximaRow.cells[0]?.textContent.trim();
+    const proximoLeitor = proximaRow.cells[1]?.textContent.trim();
+    const proximaAntena = proximaRow.cells[2]?.textContent.trim();
+    const proximoHorario = proximaRow.cells[3]?.getAttribute('data-horario') || proximaRow.cells[3]?.textContent.trim();
+    
+    // Carregar foto do próximo PING
+    await verFotoPing(proximoCodigo, proximoLeitor, proximaAntena, proximoHorario);
+    
+  } catch (error) {
+    console.error("Erro ao navegar entre fotos:", error);
+    showToast(`Erro ao navegar: ${error.message}`, "error");
+  }
 }
 
 // Funções de modal

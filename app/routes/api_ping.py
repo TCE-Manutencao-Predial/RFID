@@ -343,8 +343,6 @@ def obter_foto_ping(etiqueta_hex):
         antena = request.args.get('antena')
         horario = request.args.get('horario')
         
-        logger.info(f"Buscando foto para PING: {etiqueta_hex} (leitor={codigo_leitor}, antena={antena}, horario={horario})")
-        
         # Chamar gerenciador com parâmetros apropriados
         resultado = gerenciador.obter_foto_ping(
             codigo_leitor=codigo_leitor,
@@ -354,16 +352,21 @@ def obter_foto_ping(etiqueta_hex):
         )
         
         if not resultado.get('success', False):
+            error_type = resultado.get('error_type', 'exception')
+            status_code = 404 if error_type in ['not_found', 'no_photo'] else 500
+            
             return jsonify({
                 'success': False,
-                'error': resultado.get('error', 'Erro ao obter foto do PING')
-            }), 404
+                'error': resultado.get('error', 'Erro ao obter foto do PING'),
+                'error_type': error_type
+            }), status_code
         
         # Se não encontrou foto
         if not resultado.get('foto'):
             return jsonify({
                 'success': False,
-                'error': 'Nenhuma foto encontrada para este PING'
+                'error': 'Nenhuma foto encontrada para este PING',
+                'error_type': 'not_found'
             }), 404
         
         # Retornar a imagem
@@ -392,7 +395,8 @@ def obter_foto_ping(etiqueta_hex):
         logger.error(f"Traceback: {traceback.format_exc()}")
         return jsonify({
             'success': False,
-            'error': str(e)
+            'error': str(e),
+            'error_type': 'exception'
         }), 500
 
 @api_ping_bp.route('/ping/foto/info/<string:etiqueta_hex>', methods=['GET'])

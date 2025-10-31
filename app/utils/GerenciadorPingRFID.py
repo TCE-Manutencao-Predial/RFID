@@ -32,7 +32,8 @@ class GerenciadorPingRFID:
         self.cache = {}
         self.cache_timeout = timedelta(minutes=3)
         
-        self.logger.info("Gerenciador de PING RFID inicializado")
+        self._cache = {}
+        self._cache_timeout = 180  # 3 minutos
     
     def _get_cache_key(self, prefix, params=None):
         """Gera uma chave única para o cache baseada nos parâmetros."""
@@ -62,7 +63,6 @@ class GerenciadorPingRFID:
     def limpar_cache(self):
         """Limpa todo o cache."""
         self.cache.clear()
-        self.logger.info("Cache limpo")
     
     def _converter_horario_para_sql(self, horario):
         """
@@ -626,30 +626,29 @@ class GerenciadorPingRFID:
                 # Converter horário para formato SQL
                 horario_sql = self._converter_horario_para_sql(horario)
                 
-                query = """
+                # Primeiro verifica se o registro existe (com ou sem foto)
+                query_check = """
                     SELECT Foto, Horario, CodigoLeitor, Antena, EtiquetaRFID_hex
                     FROM leitoresRFID
                     WHERE CodigoLeitor = %s
                       AND Antena = %s
                       AND Horario = %s
                       AND EtiquetaRFID_hex LIKE 'PING_PERIODICO_%'
-                      AND Foto IS NOT NULL
                     LIMIT 1
                 """
-                cursor.execute(query, (codigo_leitor, antena, horario_sql))
+                cursor.execute(query_check, (codigo_leitor, antena, horario_sql))
             
             # Fallback: buscar por etiqueta (pega mais recente)
             elif etiqueta_hex:
-                query = """
+                query_check = """
                     SELECT Foto, Horario, CodigoLeitor, Antena, EtiquetaRFID_hex
                     FROM leitoresRFID
                     WHERE EtiquetaRFID_hex = %s 
                       AND EtiquetaRFID_hex LIKE 'PING_PERIODICO_%'
-                      AND Foto IS NOT NULL
                     ORDER BY Horario DESC
                     LIMIT 1
                 """
-                cursor.execute(query, (etiqueta_hex,))
+                cursor.execute(query_check, (etiqueta_hex,))
             
             else:
                 return {
@@ -657,21 +656,25 @@ class GerenciadorPingRFID:
                     'error': 'Parâmetros insuficientes. Forneça (codigo_leitor, antena, horario) ou etiqueta_hex'
                 }
             
-            # LOG da query SQL para debug
-            self.logger.info(f"=== OBTER FOTO PING - Query SQL ===")
-            self.logger.info(f"Query: {query}")
-            if codigo_leitor and antena and horario:
-                self.logger.info(f"Params: codigo_leitor={codigo_leitor}, antena={antena}, horario_sql={horario_sql} (original: {horario})")
-            elif etiqueta_hex:
-                self.logger.info(f"Params: etiqueta_hex={etiqueta_hex}")
-            self.logger.info(f"===================================")
-            
             resultado = cursor.fetchone()
             
             if not resultado:
                 return {
                     'success': False,
-                    'error': 'Nenhuma foto encontrada para este PING'
+                    'error': 'PING não encontrado',
+                    'error_type': 'not_found'
+                }
+            
+            # Verificar se a foto existe
+            if not resultado['Foto'] or len(resultado['Foto']) == 0:
+                return {
+                    'success': False,
+                    'error': 'Sem imagem no Banco de Dados',
+                    'error_type': 'no_photo',
+                    'horario': resultado['Horario'],
+                    'codigo_leitor': resultado['CodigoLeitor'],
+                    'antena': resultado['Antena'],
+                    'etiqueta': resultado['EtiquetaRFID_hex']
                 }
             
             return {
@@ -685,11 +688,12 @@ class GerenciadorPingRFID:
             
         except Exception as e:
             self.logger.error(f"Erro ao obter foto do PING: {e}")
-            self.logger.error(f"Query que causou erro: {query if 'query' in locals() else 'N/A'}")
+            self.logger.error(f"Query que causou erro: {query_check if 'query_check' in locals() else 'N/A'}")
             self.logger.error(f"Parametros: codigo_leitor={codigo_leitor}, antena={antena}, horario={horario}, etiqueta_hex={etiqueta_hex}")
             return {
                 'success': False,
-                'error': str(e)
+                'error': str(e),
+                'error_type': 'exception'
             }
         finally:
             if cursor:
@@ -755,15 +759,6 @@ class GerenciadorPingRFID:
                     'success': False,
                     'error': 'Parâmetros insuficientes'
                 }
-            
-            # LOG da query SQL para debug
-            self.logger.info(f"=== VERIFICAR FOTO PING - Query SQL ===")
-            self.logger.info(f"Query: {query}")
-            if codigo_leitor and antena and horario:
-                self.logger.info(f"Params: codigo_leitor={codigo_leitor}, antena={antena}, horario_original={horario}, horario_sql={horario_sql if 'horario_sql' in locals() else horario}")
-            elif etiqueta_hex:
-                self.logger.info(f"Params: etiqueta_hex={etiqueta_hex}")
-            self.logger.info(f"========================================")
             
             resultado = cursor.fetchone()
             
