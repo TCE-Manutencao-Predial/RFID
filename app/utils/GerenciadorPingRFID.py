@@ -65,15 +65,16 @@ class GerenciadorPingRFID:
         self.logger.info("Cache limpo")
     
     def _get_connection(self):
-        """Cria e retorna uma conexão com o MySQL."""
+        """Cria e retorna uma conexão com o MySQL com timeouts agressivos."""
         try:
             connection_params = {
                 'host': self.config['host'],
                 'database': self.config['database'],
                 'user': self.config['user'],
                 'password': self.config['password'],
-                'connection_timeout': self.config['connection_timeout'],
-                'autocommit': True
+                'connection_timeout': min(self.config.get('connection_timeout', 10), 5),  # Max 5 segundos
+                'autocommit': True,
+                'use_pure': False  # Usar driver C mais rápido
             }
             
             # Desabilita verificação SSL apenas para domínios tce.go.gov.br
@@ -81,6 +82,12 @@ class GerenciadorPingRFID:
                 connection_params['ssl_disabled'] = True
             
             connection = mysql.connector.connect(**connection_params)
+            
+            # Configurar timeout de execução de query (10 segundos)
+            cursor = connection.cursor()
+            cursor.execute("SET SESSION MAX_EXECUTION_TIME=10000")  # 10 segundos em ms
+            cursor.close()
+            
             return connection
         except Error as e:
             self.logger.error(f"Erro ao conectar ao MySQL: {e}")
@@ -165,22 +172,22 @@ class GerenciadorPingRFID:
 
             where_clause = " AND ".join(where_conditions)
 
-            # Usar uma única conexão com SQL_CALC_FOUND_ROWS para obter total e dados
+            # OTIMIZAÇÃO: Remover SQL_CALC_FOUND_ROWS que causa overhead
+            # Em vez disso, buscar apenas os dados e fazer COUNT só quando necessário (offset=0)
             connection = None
             cursor = None
             try:
                 connection = self._get_connection()
                 cursor = connection.cursor(dictionary=True)
                 
-                # Query para obter dados PING com contagem de total
+                # Query otimizada: buscar apenas os dados necessários
                 data_query = f"""
-                    SELECT SQL_CALC_FOUND_ROWS
+                    SELECT 
                         l.CodigoLeitor,
                         l.Horario,
                         l.Antena,
                         l.EtiquetaRFID_hex,
-                        l.RSSI,
-                        1 as TemFoto
+                        l.RSSI
                     FROM leitoresRFID l
                     WHERE {where_clause}
                     ORDER BY l.Horario DESC
@@ -193,9 +200,28 @@ class GerenciadorPingRFID:
                 cursor.execute(data_query, query_params)
                 pings_raw = cursor.fetchall()
                 
-                # Obter total de registros
-                cursor.execute("SELECT FOUND_ROWS() as total")
-                total = cursor.fetchone()['total']
+                # COUNT otimizado: só executar na primeira página OU se forçar refresh
+                if offset == 0 or force_refresh:
+                    # Usar COUNT com LIMIT para evitar scan completo em tabelas grandes
+                    count_query = f"""
+                        SELECT COUNT(*) as total 
+                        FROM (
+                            SELECT 1
+                            FROM leitoresRFID l
+                            WHERE {where_clause}
+                            LIMIT 10000
+                        ) as limited_count
+                    """
+                    cursor.execute(count_query, params)
+                    count_result = cursor.fetchone()
+                    total = count_result['total'] if count_result else 0
+                    
+                    # Se atingiu o limite, significa que há pelo menos 10000 registros
+                    if total >= 10000:
+                        total = 10000  # Mostrar "10000+" registros
+                else:
+                    # Para páginas subsequentes, estimar baseado no offset + registros retornados
+                    total = offset + len(pings_raw) + (limite if len(pings_raw) == limite else 0)
                 
                 # Processar registros
                 for ping in pings_raw:
@@ -206,7 +232,7 @@ class GerenciadorPingRFID:
                         'antena_completa': f"[{ping['CodigoLeitor']}] A{ping['Antena']}",
                         'etiqueta_hex': ping['EtiquetaRFID_hex'],
                         'rssi': ping['RSSI'],
-                        'tem_foto': bool(ping['TemFoto'])
+                        'tem_foto': True  # Todos têm foto devido ao filtro WHERE
                     }
                     
                     # Formatar horário
