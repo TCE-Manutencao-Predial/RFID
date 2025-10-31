@@ -1,4 +1,5 @@
 // ping.js - JavaScript para página de PING
+// Última atualização: 2025-10-31 - Estrutura de tabela com 7 colunas
 
 // Variáveis globais
 let paginaAtual = 1;
@@ -237,9 +238,6 @@ function renderizarTabela(pings) {
         </div>
       </div>
     `;
-
-    // Usar antena_completa se disponível
-    const antenaDisplay = ping.antena_completa || `Antena ${ping.antena}`;
 
     // Indicador de foto
     const fotoIndicador = ping.tem_foto
