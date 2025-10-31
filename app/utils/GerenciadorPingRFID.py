@@ -566,12 +566,15 @@ class GerenciadorPingRFID:
             if connection:
                 connection.close()
     
-    def obter_foto_ping(self, etiqueta_hex):
+    def obter_foto_ping(self, codigo_leitor=None, antena=None, horario=None, etiqueta_hex=None):
         """
-        Obtém a foto mais recente de um PING específico.
+        Obtém a foto de um PING específico.
         
         Args:
-            etiqueta_hex (str): Código hexadecimal da etiqueta PING
+            codigo_leitor (str): Código do leitor (preferencial)
+            antena (str): Número da antena (preferencial)
+            horario (str): Horário do PING (preferencial)
+            etiqueta_hex (str): Código da etiqueta (fallback - pega mais recente)
             
         Returns:
             dict: Resultado com foto (binário) ou erro
@@ -580,17 +583,39 @@ class GerenciadorPingRFID:
             connection = self._get_connection()
             cursor = connection.cursor(dictionary=True)
             
-            query = """
-                SELECT Foto, Horario
-                FROM leitoresRFID
-                WHERE EtiquetaRFID_hex = %s 
-                  AND EtiquetaRFID_hex LIKE 'PING_PERIODICO_%'
-                  AND Foto IS NOT NULL
-                ORDER BY Horario DESC
-                LIMIT 1
-            """
+            # Priorizar busca por CodigoLeitor + Antena + Horario (identificação única)
+            if codigo_leitor and antena and horario:
+                query = """
+                    SELECT Foto, Horario, CodigoLeitor, Antena, EtiquetaRFID_hex
+                    FROM leitoresRFID
+                    WHERE CodigoLeitor = %s
+                      AND Antena = %s
+                      AND Horario = %s
+                      AND EtiquetaRFID_hex LIKE 'PING_PERIODICO_%'
+                      AND Foto IS NOT NULL
+                    LIMIT 1
+                """
+                cursor.execute(query, (codigo_leitor, antena, horario))
             
-            cursor.execute(query, (etiqueta_hex,))
+            # Fallback: buscar por etiqueta (pega mais recente)
+            elif etiqueta_hex:
+                query = """
+                    SELECT Foto, Horario, CodigoLeitor, Antena, EtiquetaRFID_hex
+                    FROM leitoresRFID
+                    WHERE EtiquetaRFID_hex = %s 
+                      AND EtiquetaRFID_hex LIKE 'PING_PERIODICO_%'
+                      AND Foto IS NOT NULL
+                    ORDER BY Horario DESC
+                    LIMIT 1
+                """
+                cursor.execute(query, (etiqueta_hex,))
+            
+            else:
+                return {
+                    'success': False,
+                    'error': 'Parâmetros insuficientes. Forneça (codigo_leitor, antena, horario) ou etiqueta_hex'
+                }
+            
             resultado = cursor.fetchone()
             
             if not resultado:
@@ -603,11 +628,13 @@ class GerenciadorPingRFID:
                 'success': True,
                 'foto': resultado['Foto'],
                 'horario': resultado['Horario'],
-                'etiqueta': etiqueta_hex
+                'codigo_leitor': resultado['CodigoLeitor'],
+                'antena': resultado['Antena'],
+                'etiqueta': resultado['EtiquetaRFID_hex']
             }
             
         except Exception as e:
-            self.logger.error(f"Erro ao obter foto do PING {etiqueta_hex}: {e}")
+            self.logger.error(f"Erro ao obter foto do PING: {e}")
             return {
                 'success': False,
                 'error': str(e)
@@ -618,12 +645,15 @@ class GerenciadorPingRFID:
             if connection:
                 connection.close()
     
-    def verificar_foto_ping(self, etiqueta_hex):
+    def verificar_foto_ping(self, codigo_leitor=None, antena=None, horario=None, etiqueta_hex=None):
         """
         Verifica se um PING possui foto disponível.
         
         Args:
-            etiqueta_hex (str): Código hexadecimal da etiqueta PING
+            codigo_leitor (str): Código do leitor (preferencial)
+            antena (str): Número da antena (preferencial)
+            horario (str): Horário do PING (preferencial)
+            etiqueta_hex (str): Código da etiqueta (fallback)
             
         Returns:
             dict: Informações sobre disponibilidade da foto
@@ -632,17 +662,40 @@ class GerenciadorPingRFID:
             connection = self._get_connection()
             cursor = connection.cursor(dictionary=True)
             
-            query = """
-                SELECT 
-                    COUNT(*) as total_fotos,
-                    MAX(Horario) as ultima_foto,
-                    SUM(CASE WHEN Foto IS NOT NULL THEN 1 ELSE 0 END) as fotos_disponiveis
-                FROM leitoresRFID
-                WHERE EtiquetaRFID_hex = %s 
-                  AND EtiquetaRFID_hex LIKE 'PING_PERIODICO_%'
-            """
+            # Priorizar busca por CodigoLeitor + Antena + Horario
+            if codigo_leitor and antena and horario:
+                query = """
+                    SELECT 
+                        COUNT(*) as total_fotos,
+                        MAX(Horario) as ultima_foto,
+                        SUM(CASE WHEN Foto IS NOT NULL THEN 1 ELSE 0 END) as fotos_disponiveis
+                    FROM leitoresRFID
+                    WHERE CodigoLeitor = %s
+                      AND Antena = %s
+                      AND Horario = %s
+                      AND EtiquetaRFID_hex LIKE 'PING_PERIODICO_%'
+                """
+                cursor.execute(query, (codigo_leitor, antena, horario))
             
-            cursor.execute(query, (etiqueta_hex,))
+            # Fallback: buscar por etiqueta
+            elif etiqueta_hex:
+                query = """
+                    SELECT 
+                        COUNT(*) as total_fotos,
+                        MAX(Horario) as ultima_foto,
+                        SUM(CASE WHEN Foto IS NOT NULL THEN 1 ELSE 0 END) as fotos_disponiveis
+                    FROM leitoresRFID
+                    WHERE EtiquetaRFID_hex = %s 
+                      AND EtiquetaRFID_hex LIKE 'PING_PERIODICO_%'
+                """
+                cursor.execute(query, (etiqueta_hex,))
+            
+            else:
+                return {
+                    'success': False,
+                    'error': 'Parâmetros insuficientes'
+                }
+            
             resultado = cursor.fetchone()
             
             tem_foto = resultado['fotos_disponiveis'] > 0 if resultado else False
@@ -652,11 +705,14 @@ class GerenciadorPingRFID:
                 'tem_foto': tem_foto,
                 'total_fotos': resultado['total_fotos'] if resultado else 0,
                 'ultima_foto': resultado['ultima_foto'] if resultado else None,
+                'codigo_leitor': codigo_leitor,
+                'antena': antena,
+                'horario': horario,
                 'etiqueta': etiqueta_hex
             }
             
         except Exception as e:
-            self.logger.error(f"Erro ao verificar foto do PING {etiqueta_hex}: {e}")
+            self.logger.error(f"Erro ao verificar foto do PING: {e}")
             return {
                 'success': False,
                 'error': str(e),

@@ -249,7 +249,7 @@ function renderizarTabela(pings) {
     // Botão de foto - só mostrar se tem foto disponível
     const botaoFoto = ping.tem_foto 
       ? `<button class="rfid-action-btn rfid-action-btn-photo" 
-                onclick="verFotoPing('${ping.etiqueta_hex}')"
+                onclick="verFotoPing('${ping.etiqueta_hex}', '${ping.codigo_leitor}', '${ping.antena}', '${ping.horario}')"
                 title="Ver foto">
           <i class="fas fa-camera"></i> Foto
         </button>`
@@ -440,7 +440,7 @@ async function carregarHistoricoPing(codigo) {
   }
 }
 
-async function verFotoPing(codigo) {
+async function verFotoPing(codigo, codigoLeitor, antena, horario) {
   try {
     // Preencher informações no modal
     document.getElementById("fotoEtiquetaCodigo").textContent = codigo;
@@ -456,8 +456,15 @@ async function verFotoPing(codigo) {
     // Abrir modal
     abrirModal("modalFoto");
 
+    // Construir URL com parâmetros
+    const params = new URLSearchParams({
+      codigo_leitor: codigoLeitor,
+      antena: antena,
+      horario: horario
+    });
+
     // Verificar se o PING tem foto
-    const infoResponse = await fetch(`/RFID/api/ping/foto/info/${codigo}`);
+    const infoResponse = await fetch(`/RFID/api/ping/foto/info/${codigo}?${params}`);
     
     if (!infoResponse.ok) {
       throw new Error(`Erro HTTP: ${infoResponse.status}`);
@@ -471,7 +478,7 @@ async function verFotoPing(codigo) {
     
     // Atualizar informações da foto
     document.getElementById("fotoEtiquetaInfo").textContent = 
-      `Total de fotos: ${infoData.total_fotos} | Última foto: ${infoData.ultima_foto ? new Date(infoData.ultima_foto).toLocaleString('pt-BR') : 'N/A'}`;
+      `Leitor: ${codigoLeitor} | Antena: ${antena} | Horário: ${new Date(horario).toLocaleString('pt-BR')}`;
     
     if (!infoData.tem_foto) {
       fotoLoading.style.display = "none";
@@ -486,7 +493,7 @@ async function verFotoPing(codigo) {
     }
     
     // Carregar a foto
-    const fotoUrl = `/RFID/api/ping/foto/${codigo}?t=${Date.now()}`;
+    const fotoUrl = `/RFID/api/ping/foto/${codigo}?${params}&t=${Date.now()}`;
     
     const img = new Image();
     img.onload = function() {
@@ -494,7 +501,7 @@ async function verFotoPing(codigo) {
       fotoContainer.innerHTML = `
         <img src="${fotoUrl}" alt="Foto do PING ${codigo}" class="foto-etiqueta" />
         <div class="foto-controls">
-          <button class="rfid-btn rfid-btn-secondary" onclick="downloadFoto('${codigo}')">
+          <button class="rfid-btn rfid-btn-secondary" onclick="downloadFoto('${codigo}', '${codigoLeitor}', '${antena}', '${horario}')">
             <i class="fas fa-download"></i> Baixar
           </button>
           <button class="rfid-btn rfid-btn-secondary" onclick="abrirFotoNovaAba('${fotoUrl}')">
@@ -511,7 +518,7 @@ async function verFotoPing(codigo) {
           <i class="fas fa-exclamation-triangle"></i>
           <p>Erro ao carregar a imagem</p>
           <small>A imagem pode estar corrompida ou em um formato não suportado.</small>
-          <button class="rfid-btn rfid-btn-primary" onclick="verFotoPing('${codigo}')">
+          <button class="rfid-btn rfid-btn-primary" onclick="verFotoPing('${codigo}', '${codigoLeitor}', '${antena}', '${horario}')">
             <i class="fas fa-redo"></i> Tentar Novamente
           </button>
         </div>
@@ -532,7 +539,7 @@ async function verFotoPing(codigo) {
         <i class="fas fa-exclamation-triangle"></i>
         <p>Erro ao carregar foto</p>
         <small>${error.message}</small>
-        <button class="rfid-btn rfid-btn-primary" onclick="verFotoPing('${codigo}')">
+        <button class="rfid-btn rfid-btn-primary" onclick="verFotoPing('${codigo}', '${codigoLeitor}', '${antena}', '${horario}')">
           <i class="fas fa-redo"></i> Tentar Novamente
         </button>
       </div>
@@ -542,10 +549,15 @@ async function verFotoPing(codigo) {
   }
 }
 
-function downloadFoto(codigo) {
+function downloadFoto(codigo, codigoLeitor, antena, horario) {
+  const params = new URLSearchParams({
+    codigo_leitor: codigoLeitor,
+    antena: antena,
+    horario: horario
+  });
   const link = document.createElement('a');
-  link.href = `/RFID/api/ping/foto/${codigo}`;
-  link.download = `ping_${codigo}.jpg`;
+  link.href = `/RFID/api/ping/foto/${codigo}?${params}`;
+  link.download = `ping_${codigoLeitor}_A${antena}_${codigo}.jpg`;
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);

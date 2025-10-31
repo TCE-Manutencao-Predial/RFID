@@ -320,10 +320,13 @@ def listar_antenas():
 @api_ping_bp.route('/ping/foto/<string:etiqueta_hex>', methods=['GET'])
 def obter_foto_ping(etiqueta_hex):
     """
-    Obtém a foto mais recente de um PING específico.
+    Obtém a foto de um PING específico.
     
     Params:
-        - etiqueta_hex: código hexadecimal da etiqueta PING
+        - etiqueta_hex: código hexadecimal da etiqueta PING (na URL)
+        - codigo_leitor: código do leitor (query param - preferencial)
+        - antena: número da antena (query param - preferencial)
+        - horario: horário do PING (query param - preferencial)
         
     Returns:
         - Imagem binária ou JSON com erro
@@ -335,9 +338,20 @@ def obter_foto_ping(etiqueta_hex):
             gerenciador = GerenciadorPingRFID.get_instance()
             current_app.config['GERENCIADOR_PING'] = gerenciador
         
-        logger.info(f"Buscando foto para PING: {etiqueta_hex}")
+        # Obter parâmetros opcionais
+        codigo_leitor = request.args.get('codigo_leitor')
+        antena = request.args.get('antena')
+        horario = request.args.get('horario')
         
-        resultado = gerenciador.obter_foto_ping(etiqueta_hex)
+        logger.info(f"Buscando foto para PING: {etiqueta_hex} (leitor={codigo_leitor}, antena={antena}, horario={horario})")
+        
+        # Chamar gerenciador com parâmetros apropriados
+        resultado = gerenciador.obter_foto_ping(
+            codigo_leitor=codigo_leitor,
+            antena=antena,
+            horario=horario,
+            etiqueta_hex=etiqueta_hex
+        )
         
         if not resultado.get('success', False):
             return jsonify({
@@ -387,7 +401,10 @@ def verificar_foto_ping(etiqueta_hex):
     Verifica se um PING possui foto disponível.
     
     Params:
-        - etiqueta_hex: código hexadecimal da etiqueta PING
+        - etiqueta_hex: código hexadecimal da etiqueta PING (na URL)
+        - codigo_leitor: código do leitor (query param - preferencial)
+        - antena: número da antena (query param - preferencial)
+        - horario: horário do PING (query param - preferencial)
         
     Returns:
         - JSON com informações sobre disponibilidade da foto
@@ -399,7 +416,17 @@ def verificar_foto_ping(etiqueta_hex):
             gerenciador = GerenciadorPingRFID.get_instance()
             current_app.config['GERENCIADOR_PING'] = gerenciador
         
-        resultado = gerenciador.verificar_foto_ping(etiqueta_hex)
+        # Obter parâmetros opcionais
+        codigo_leitor = request.args.get('codigo_leitor')
+        antena = request.args.get('antena')
+        horario = request.args.get('horario')
+        
+        resultado = gerenciador.verificar_foto_ping(
+            codigo_leitor=codigo_leitor,
+            antena=antena,
+            horario=horario,
+            etiqueta_hex=etiqueta_hex
+        )
         
         if not resultado.get('success', False):
             return jsonify({
