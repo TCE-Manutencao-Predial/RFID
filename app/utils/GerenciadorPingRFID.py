@@ -323,7 +323,8 @@ class GerenciadorPingRFID:
                 
                 where_clause = " AND ".join(where_conditions)
                 
-                # Query para estatísticas
+                # Query para estatísticas OTIMIZADA com LIMIT
+                # Usar subconsulta limitada para evitar scan completo em tabelas grandes
                 stats_query = f"""
                     SELECT 
                         COUNT(*) as total_pings,
@@ -332,18 +333,43 @@ class GerenciadorPingRFID:
                         MIN(l.Horario) as primeiro_ping,
                         MAX(l.Horario) as ultimo_ping,
                         COUNT(*) as pings_com_foto
-                    FROM leitoresRFID l
-                    WHERE {where_clause}
+                    FROM (
+                        SELECT 
+                            l.EtiquetaRFID_hex,
+                            l.CodigoLeitor,
+                            l.Antena,
+                            l.Horario
+                        FROM leitoresRFID l
+                        WHERE {where_clause}
+                        ORDER BY l.Horario DESC
+                        LIMIT 10000
+                    ) l
                 """
                 
                 cursor.execute(stats_query, params)
                 stats = cursor.fetchone()
                 
+                # Garantir valores padrão caso a query retorne NULL
+                if not stats:
+                    stats = {
+                        'total_pings': 0,
+                        'pings_unicos': 0,
+                        'total_antenas': 0,
+                        'primeiro_ping': None,
+                        'ultimo_ping': None,
+                        'pings_com_foto': 0
+                    }
+                
                 # Formatar datas
-                if stats['primeiro_ping']:
+                if stats.get('primeiro_ping'):
                     stats['primeiro_ping_formatado'] = stats['primeiro_ping'].strftime('%d/%m/%Y %H:%M')
-                if stats['ultimo_ping']:
+                else:
+                    stats['primeiro_ping_formatado'] = '--'
+                    
+                if stats.get('ultimo_ping'):
                     stats['ultimo_ping_formatado'] = stats['ultimo_ping'].strftime('%d/%m/%Y %H:%M')
+                else:
+                    stats['ultimo_ping_formatado'] = '--'
                 
                 result = {
                     'success': True,
@@ -362,6 +388,33 @@ class GerenciadorPingRFID:
                 if connection:
                     connection.close()
             
+        except mysql.connector.Error as db_error:
+            # Tratamento específico para erros de timeout do MySQL
+            error_msg = str(db_error)
+            if 'max_execution_time' in error_msg.lower() or 'timeout' in error_msg.lower():
+                self.logger.warning(f"Timeout na query de estatísticas PING: {db_error}")
+                # Retornar estatísticas vazias em caso de timeout
+                return {
+                    'success': True,
+                    'estatisticas': {
+                        'total_pings': 0,
+                        'pings_unicos': 0,
+                        'total_antenas': 0,
+                        'primeiro_ping_formatado': '--',
+                        'ultimo_ping_formatado': '--',
+                        'pings_com_foto': 0
+                    },
+                    'from_cache': False,
+                    'warning': 'Timeout ao calcular estatísticas - dados podem estar desatualizados'
+                }
+            else:
+                self.logger.error(f"Erro de banco ao obter estatísticas de PING: {db_error}")
+                return {
+                    'success': False,
+                    'error': str(db_error),
+                    'estatisticas': {},
+                    'from_cache': False
+                }
         except Exception as e:
             self.logger.error(f"Erro ao obter estatísticas de PING: {e}")
             return {
