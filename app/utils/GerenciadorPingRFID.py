@@ -83,9 +83,10 @@ class GerenciadorPingRFID:
             
             connection = mysql.connector.connect(**connection_params)
             
-            # Configurar timeout de execução de query (10 segundos)
+            # Configurar timeout de execução de query
+            # 30 segundos para queries que podem envolver BLOBs (fotos)
             cursor = connection.cursor()
-            cursor.execute("SET SESSION MAX_EXECUTION_TIME=10000")  # 10 segundos em ms
+            cursor.execute("SET SESSION MAX_EXECUTION_TIME=30000")  # 30 segundos em ms
             cursor.close()
             
             return connection
@@ -517,8 +518,6 @@ class GerenciadorPingRFID:
                     MAX(Horario) as ultimo_ping
                 FROM leitoresRFID
                 WHERE EtiquetaRFID_hex LIKE 'PING_PERIODICO_%'
-                  AND Foto IS NOT NULL
-                  AND LENGTH(Foto) > 0
                 GROUP BY CodigoLeitor, Antena
                 ORDER BY CodigoLeitor, Antena
             """
@@ -586,8 +585,7 @@ class GerenciadorPingRFID:
                 FROM leitoresRFID
                 WHERE EtiquetaRFID_hex = %s 
                   AND EtiquetaRFID_hex LIKE 'PING_PERIODICO_%'
-                  AND Foto IS NOT NULL 
-                  AND LENGTH(Foto) > 0
+                  AND Foto IS NOT NULL
                 ORDER BY Horario DESC
                 LIMIT 1
             """
@@ -637,18 +635,17 @@ class GerenciadorPingRFID:
             query = """
                 SELECT 
                     COUNT(*) as total_fotos,
-                    MAX(Horario) as ultima_foto
+                    MAX(Horario) as ultima_foto,
+                    SUM(CASE WHEN Foto IS NOT NULL THEN 1 ELSE 0 END) as fotos_disponiveis
                 FROM leitoresRFID
                 WHERE EtiquetaRFID_hex = %s 
                   AND EtiquetaRFID_hex LIKE 'PING_PERIODICO_%'
-                  AND Foto IS NOT NULL 
-                  AND LENGTH(Foto) > 0
             """
             
             cursor.execute(query, (etiqueta_hex,))
             resultado = cursor.fetchone()
             
-            tem_foto = resultado['total_fotos'] > 0 if resultado else False
+            tem_foto = resultado['fotos_disponiveis'] > 0 if resultado else False
             
             return {
                 'success': True,
