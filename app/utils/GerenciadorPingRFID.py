@@ -106,7 +106,7 @@ class GerenciadorPingRFID:
         Returns:
             dict: Resultado com pings e total
         """
-        # Gerar chave do cache
+        # Gerar chave do cache para dados
         cache_params = {
             'filtros': filtros or {},
             'limite': limite,
@@ -114,10 +114,17 @@ class GerenciadorPingRFID:
         }
         cache_key = self._get_cache_key('pings', cache_params)
         
+        # Gerar chave separada para o total (sem offset/limite)
+        total_cache_key = self._get_cache_key('pings_total', {'filtros': filtros or {}})
+        
         # Verificar cache primeiro
         if not force_refresh:
             cached_result = self._get_from_cache(cache_key)
             if cached_result:
+                # Tentar obter total do cache separado
+                cached_total = self._get_from_cache(total_cache_key)
+                if cached_total:
+                    cached_result['total'] = cached_total
                 cached_result['from_cache'] = True
                 return cached_result
         
@@ -203,26 +210,37 @@ class GerenciadorPingRFID:
                 
                 # COUNT otimizado: só executar na primeira página OU se forçar refresh
                 if offset == 0 or force_refresh:
-                    # Usar COUNT com LIMIT para evitar scan completo em tabelas grandes
+                    # Fazer COUNT completo (agora que temos índices, é rápido!)
                     count_query = f"""
                         SELECT COUNT(*) as total 
-                        FROM (
-                            SELECT 1
-                            FROM leitoresRFID l
-                            WHERE {where_clause}
-                            LIMIT 10000
-                        ) as limited_count
+                        FROM leitoresRFID l
+                        WHERE {where_clause}
                     """
                     cursor.execute(count_query, params)
                     count_result = cursor.fetchone()
                     total = count_result['total'] if count_result else 0
                     
-                    # Se atingiu o limite, significa que há pelo menos 10000 registros
-                    if total >= 10000:
-                        total = 10000  # Mostrar "10000+" registros
+                    # Cachear o total separadamente (sem offset/limite)
+                    total_cache_key = self._get_cache_key('pings_total', {'filtros': filtros or {}})
+                    self._set_cache(total_cache_key, total)
                 else:
-                    # Para páginas subsequentes, estimar baseado no offset + registros retornados
-                    total = offset + len(pings_raw) + (limite if len(pings_raw) == limite else 0)
+                    # Para páginas subsequentes, tentar obter do cache
+                    total_cache_key = self._get_cache_key('pings_total', {'filtros': filtros or {}})
+                    cached_total = self._get_from_cache(total_cache_key)
+                    
+                    if cached_total is not None:
+                        total = cached_total
+                    else:
+                        # Se não houver cache, fazer o COUNT
+                        count_query = f"""
+                            SELECT COUNT(*) as total 
+                            FROM leitoresRFID l
+                            WHERE {where_clause}
+                        """
+                        cursor.execute(count_query, params)
+                        count_result = cursor.fetchone()
+                        total = count_result['total'] if count_result else 0
+                        self._set_cache(total_cache_key, total)
                 
                 # Processar registros
                 for ping in pings_raw:
@@ -324,8 +342,7 @@ class GerenciadorPingRFID:
                 
                 where_clause = " AND ".join(where_conditions)
                 
-                # Query para estatísticas OTIMIZADA com LIMIT
-                # Usar subconsulta limitada para evitar scan completo em tabelas grandes
+                # Query para estatísticas (agora rápida com índices!)
                 stats_query = f"""
                     SELECT 
                         COUNT(*) as total_pings,
@@ -334,17 +351,8 @@ class GerenciadorPingRFID:
                         MIN(l.Horario) as primeiro_ping,
                         MAX(l.Horario) as ultimo_ping,
                         COUNT(*) as pings_com_foto
-                    FROM (
-                        SELECT 
-                            l.EtiquetaRFID_hex,
-                            l.CodigoLeitor,
-                            l.Antena,
-                            l.Horario
-                        FROM leitoresRFID l
-                        WHERE {where_clause}
-                        ORDER BY l.Horario DESC
-                        LIMIT 10000
-                    ) l
+                    FROM leitoresRFID l
+                    WHERE {where_clause}
                 """
                 
                 cursor.execute(stats_query, params)
