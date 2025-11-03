@@ -747,6 +747,15 @@ function abrirFotoNovaAba(url) {
 
 // Navegação
 function navegarPara(secao) {
+    // Verificar se o usuário pode acessar PING
+    if (secao === 'ping') {
+        const podeAcessarPing = document.body.getAttribute('data-pode-acessar-ping') === 'true';
+        if (!podeAcessarPing) {
+            showToast('Você não tem permissão para acessar esta seção', 'error');
+            return;
+        }
+    }
+    
     switch(secao) {
         case 'etiquetas':
             window.location.href = '/RFID/';

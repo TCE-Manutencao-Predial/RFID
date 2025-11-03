@@ -1,9 +1,98 @@
 # app/routes/web.py
-from flask import Blueprint, render_template, current_app
+from flask import Blueprint, render_template, current_app, request, abort
 import logging
+import requests
 
 web_bp = Blueprint('web', __name__)
 logger = logging.getLogger('controlerfid.web')
+
+# URLs da API do HelpDesk Monitor
+HELPDESK_API_BASE = 'https://automacao.tce.go.gov.br/helpdeskmonitor/api'
+HELPDESK_API_USUARIOS = f'{HELPDESK_API_BASE}/usuarios_htpasswd'
+
+# Cache de competências dos usuários (evita múltiplas requisições)
+_cache_competencias = {}
+
+def obter_usuario_atual():
+    """Obtém o nome do usuário autenticado via HTTP Basic Auth."""
+    # Apache passa o usuário autenticado via REMOTE_USER
+    usuario = request.environ.get('REMOTE_USER', '')
+    return usuario.lower() if usuario else None
+
+def obter_competencias_usuario(usuario_htpasswd):
+    """
+    Obtém as competências (funções) de um usuário consultando a API do HelpDesk Monitor.
+    
+    Returns:
+        list: Lista de competências (funções) do usuário, ou lista vazia se não encontrado
+    """
+    if not usuario_htpasswd:
+        return []
+    
+    # Verificar cache
+    if usuario_htpasswd in _cache_competencias:
+        return _cache_competencias[usuario_htpasswd]
+    
+    try:
+        # Consultar API do HelpDesk Monitor
+        url = f"{HELPDESK_API_USUARIOS}/{usuario_htpasswd}"
+        response = requests.get(url, timeout=5)
+        
+        if response.status_code == 200:
+            dados = response.json()
+            # A API pode retornar o campo 'funcoes' (lista) ou precisamos buscar nos técnicos
+            competencias = dados.get('funcoes', [])
+            
+            # Se não houver funcoes direto, buscar nos técnicos
+            if not competencias:
+                url_tecnico = f"{HELPDESK_API_BASE}/contatos_tecnicos"
+                response_tecnico = requests.get(url_tecnico, timeout=5)
+                if response_tecnico.status_code == 200:
+                    tecnicos = response_tecnico.json()
+                    for tecnico in tecnicos:
+                        if tecnico.get('nome_usuario_htpasswd', '').lower() == usuario_htpasswd.lower():
+                            competencias = tecnico.get('funcoes', [])
+                            break
+            
+            # Cachear resultado
+            _cache_competencias[usuario_htpasswd] = competencias
+            logger.info(f"Competências obtidas para {usuario_htpasswd}: {competencias}")
+            return competencias
+        else:
+            logger.warning(f"Usuário {usuario_htpasswd} não encontrado na API do HelpDesk Monitor")
+            _cache_competencias[usuario_htpasswd] = []
+            return []
+            
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Erro ao consultar API do HelpDesk Monitor para {usuario_htpasswd}: {e}")
+        return []
+
+def usuario_tem_competencia(competencia_requerida):
+    """
+    Verifica se o usuário atual possui uma competência específica.
+    
+    Args:
+        competencia_requerida: Nome da competência (ex: 'RFID', 'TI')
+    
+    Returns:
+        bool: True se o usuário possui a competência
+    """
+    usuario = obter_usuario_atual()
+    if not usuario:
+        return False
+    
+    competencias = obter_competencias_usuario(usuario)
+    competencia_upper = competencia_requerida.upper()
+    
+    return competencia_upper in [c.upper() for c in competencias]
+
+def usuario_pode_acessar_sistema():
+    """Verifica se o usuário tem a competência RFID para acessar o sistema."""
+    return usuario_tem_competencia('RFID')
+
+def usuario_pode_acessar_ping():
+    """Verifica se o usuário tem a competência TI para acessar funcionalidades PING."""
+    return usuario_tem_competencia('TI')
 
 @web_bp.route('/')
 @web_bp.route('/index')
@@ -12,6 +101,12 @@ logger = logging.getLogger('controlerfid.web')
 def etiquetas():
     """Página principal de controle de etiquetas RFID."""
     try:
+        # Verificar se o usuário tem competência RFID
+        if not usuario_pode_acessar_sistema():
+            usuario = obter_usuario_atual()
+            logger.warning(f"Usuário '{usuario}' tentou acessar o sistema sem a competência RFID")
+            abort(403)  # Forbidden
+        
         gerenciador = current_app.config.get('GERENCIADOR_RFID')
         if not gerenciador:
             logger.error("Gerenciador RFID não inicializado")
@@ -21,7 +116,14 @@ def etiquetas():
         stats_result = gerenciador.obter_estatisticas()
         estatisticas = stats_result.get('estatisticas', {})
         
-        return render_template('etiquetas.html', estatisticas=estatisticas)
+        # Passar informação de acesso ao PING para o template
+        usuario_atual = obter_usuario_atual()
+        pode_acessar_ping = usuario_pode_acessar_ping()
+        
+        return render_template('etiquetas.html', 
+                             estatisticas=estatisticas,
+                             usuario_atual=usuario_atual,
+                             pode_acessar_ping=pode_acessar_ping)
     
     except Exception as e:
         logger.error(f"Erro ao carregar página de etiquetas: {e}")
@@ -32,14 +134,26 @@ def etiquetas():
 def inventarios():
     """Página de gerenciamento de inventários RFID."""
     try:
+        # Verificar se o usuário tem competência RFID
+        if not usuario_pode_acessar_sistema():
+            usuario = obter_usuario_atual()
+            logger.warning(f"Usuário '{usuario}' tentou acessar inventários sem a competência RFID")
+            abort(403)  # Forbidden
+        
         gerenciador = current_app.config.get('GERENCIADOR_RFID')
         if not gerenciador:
             logger.error("Gerenciador RFID não inicializado")
             return render_template('erro_interno.html'), 500
         
+        # Passar informação de acesso ao PING para o template
+        usuario_atual = obter_usuario_atual()
+        pode_acessar_ping = usuario_pode_acessar_ping()
+        
         # Futuramente: obter dados específicos de inventários
         # Por enquanto, renderiza a página básica
-        return render_template('inventarios.html')
+        return render_template('inventarios.html',
+                             usuario_atual=usuario_atual,
+                             pode_acessar_ping=pode_acessar_ping)
     
     except Exception as e:
         logger.error(f"Erro ao carregar página de inventários: {e}")
@@ -50,14 +164,26 @@ def inventarios():
 def leitores():
     """Página de gerenciamento de leitores RFID."""
     try:
+        # Verificar se o usuário tem competência RFID
+        if not usuario_pode_acessar_sistema():
+            usuario = obter_usuario_atual()
+            logger.warning(f"Usuário '{usuario}' tentou acessar leitores sem a competência RFID")
+            abort(403)  # Forbidden
+        
         gerenciador = current_app.config.get('GERENCIADOR_RFID')
         if not gerenciador:
             logger.error("Gerenciador RFID não inicializado")
             return render_template('erro_interno.html'), 500
         
+        # Passar informação de acesso ao PING para o template
+        usuario_atual = obter_usuario_atual()
+        pode_acessar_ping = usuario_pode_acessar_ping()
+        
         # Futuramente: obter dados específicos de leitores
         # Por enquanto, renderiza a página básica
-        return render_template('leitores.html')
+        return render_template('leitores.html',
+                             usuario_atual=usuario_atual,
+                             pode_acessar_ping=pode_acessar_ping)
     
     except Exception as e:
         logger.error(f"Erro ao carregar página de leitores: {e}")
@@ -68,14 +194,26 @@ def leitores():
 def emprestimos():
     """Página de gerenciamento de empréstimos de ferramentas."""
     try:
+        # Verificar se o usuário tem competência RFID
+        if not usuario_pode_acessar_sistema():
+            usuario = obter_usuario_atual()
+            logger.warning(f"Usuário '{usuario}' tentou acessar empréstimos sem a competência RFID")
+            abort(403)  # Forbidden
+        
         gerenciador = current_app.config.get('GERENCIADOR_RFID')
         if not gerenciador:
             logger.error("Gerenciador RFID não inicializado")
             return render_template('erro_interno.html'), 500
         
+        # Passar informação de acesso ao PING para o template
+        usuario_atual = obter_usuario_atual()
+        pode_acessar_ping = usuario_pode_acessar_ping()
+        
         # Futuramente: obter dados específicos de empréstimos
         # Por enquanto, renderiza a página básica
-        return render_template('emprestimos.html')
+        return render_template('emprestimos.html',
+                             usuario_atual=usuario_atual,
+                             pode_acessar_ping=pode_acessar_ping)
     
     except Exception as e:
         logger.error(f"Erro ao carregar página de empréstimos: {e}")
@@ -86,13 +224,29 @@ def emprestimos():
 def ping():
     """Página de monitoramento de registros PING."""
     try:
+        # Verificar se o usuário tem competência RFID (acesso básico ao sistema)
+        if not usuario_pode_acessar_sistema():
+            usuario = obter_usuario_atual()
+            logger.warning(f"Usuário '{usuario}' tentou acessar PING sem a competência RFID")
+            abort(403)  # Forbidden
+        
+        # Verificar se o usuário tem competência TI (acesso ao PING)
+        if not usuario_pode_acessar_ping():
+            usuario = obter_usuario_atual()
+            logger.warning(f"Usuário '{usuario}' tentou acessar página PING sem a competência TI")
+            abort(403)  # Forbidden
+        
         gerenciador = current_app.config.get('GERENCIADOR_RFID')
         if not gerenciador:
             logger.error("Gerenciador RFID não inicializado")
             return render_template('erro_interno.html'), 500
         
+        usuario_atual = obter_usuario_atual()
+        
         # Renderiza a página de PING
-        return render_template('ping.html')
+        return render_template('ping.html',
+                             usuario_atual=usuario_atual,
+                             pode_acessar_ping=True)
     
     except Exception as e:
         logger.error(f"Erro ao carregar página de PING: {e}")

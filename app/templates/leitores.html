@@ -16,7 +16,7 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/leitores.css') }}" />
   </head>
 
-  <body class="rfid-custom-layout">
+  <body class="rfid-custom-layout" data-pode-acessar-ping="{{ 'true' if pode_acessar_ping else 'false' }}">
     <!-- Container de Toast -->
     <div class="toast-container" id="toastContainer"></div>
 
@@ -46,10 +46,12 @@
             <i class="fas fa-hand-holding"></i>
             <span>Empréstimos</span>
           </button>
+          {% if pode_acessar_ping %}
           <button class="rfid-nav-btn" onclick="navegarPara('ping')">
             <i class="fas fa-wifi"></i>
             <span>PING</span>
           </button>
+          {% endif %}
         </div>
       </nav>
     </div>
