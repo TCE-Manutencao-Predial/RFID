@@ -159,6 +159,7 @@ def criar_etiqueta():
             }), 400
         
         logger.info(f"Criando nova etiqueta: {dados.get('EtiquetaRFID_hex')}")
+        logger.debug(f"Dados completos recebidos: {dados}")
         
         # Criar etiqueta
         resultado = gerenciador.criar_etiqueta(dados)
@@ -239,6 +240,7 @@ def atualizar_etiqueta(id_etiqueta):
             }), 400
         
         logger.info(f"Atualizando etiqueta {id_etiqueta} com dados: {list(dados.keys())}")
+        logger.debug(f"Dados completos recebidos: {dados}")
         
         # Atualizar etiqueta
         resultado = gerenciador.atualizar_etiqueta(id_etiqueta, dados)

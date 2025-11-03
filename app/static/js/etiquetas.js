@@ -591,6 +591,15 @@ async function salvarEtiqueta(event) {
     const numeroSerie = document.getElementById('etiquetaNumeroSerie').value.trim();
     const numeroPatrimonio = document.getElementById('etiquetaNumeroPatrimonio').value.trim();
     
+    console.log('Dados capturados do formulário:', {
+        id,
+        codigoVisual,
+        codigoCompletoOriginal,
+        descricao,
+        numeroSerie,
+        numeroPatrimonio
+    });
+    
     if (!codigoVisual) {
         showToast('O código da etiqueta é obrigatório', 'error');
         return;
@@ -613,17 +622,16 @@ async function salvarEtiqueta(event) {
             Descricao: descricao
         };
         
-        // Adicionar NumeroSerie e NumeroPatrimonio se preenchidos
-        if (numeroSerie) {
-            dados.NumeroSerie = numeroSerie;
-        }
-        if (numeroPatrimonio) {
-            dados.NumeroPatrimonio = numeroPatrimonio;
-        }
+        // Adicionar NumeroSerie e NumeroPatrimonio sempre (mesmo se vazios)
+        dados.NumeroSerie = numeroSerie || '';
+        dados.NumeroPatrimonio = numeroPatrimonio || '';
         
+        // Adicionar foto se houver
         if (fotoBase64) {
             dados.Foto = fotoBase64;
         }
+        
+        console.log('Dados que serão enviados:', dados);
         
         if (id) {
             // Editar etiqueta existente
@@ -645,7 +653,12 @@ async function salvarEtiqueta(event) {
             });
         }
         
+        console.log('Response status:', response.status);
+        console.log('Response headers:', response.headers);
+        
         const result = await response.json();
+        
+        console.log('Resultado da API:', result);
         
         if (result.success) {
             showToast(

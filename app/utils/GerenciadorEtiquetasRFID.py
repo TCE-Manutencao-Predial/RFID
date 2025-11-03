@@ -100,7 +100,7 @@ class GerenciadorEtiquetasRFID:
         Cria uma nova etiqueta RFID.
         
         Args:
-            dados (dict): Dados da etiqueta (EtiquetaRFID_hex, Descricao, Foto[opcional])
+            dados (dict): Dados da etiqueta (EtiquetaRFID_hex, Descricao, NumeroSerie, NumeroPatrimonio, Foto[opcional])
             
         Returns:
             dict: Resultado da operação com ID da nova etiqueta
@@ -137,6 +137,40 @@ class GerenciadorEtiquetasRFID:
             if dados.get('Descricao'):
                 campos.append('Descricao')
                 valores.append(dados['Descricao'])
+                placeholders.append('%s')
+            
+            # Adicionar NumeroSerie (com validação de duplicidade)
+            if dados.get('NumeroSerie'):
+                numero_serie = dados['NumeroSerie']
+                # Verificar se o número de série já existe
+                check_query = "SELECT COUNT(*) FROM etiquetasRFID WHERE NumeroSerie = %s"
+                cursor.execute(check_query, (numero_serie,))
+                
+                if cursor.fetchone()[0] > 0:
+                    return {
+                        'success': False,
+                        'error': 'Já existe outra etiqueta com este número de série'
+                    }
+                
+                campos.append('NumeroSerie')
+                valores.append(numero_serie)
+                placeholders.append('%s')
+            
+            # Adicionar NumeroPatrimonio (com validação de duplicidade)
+            if dados.get('NumeroPatrimonio'):
+                numero_patrimonio = dados['NumeroPatrimonio']
+                # Verificar se o número de patrimônio já existe
+                check_query = "SELECT COUNT(*) FROM etiquetasRFID WHERE NumeroPatrimonio = %s"
+                cursor.execute(check_query, (numero_patrimonio,))
+                
+                if cursor.fetchone()[0] > 0:
+                    return {
+                        'success': False,
+                        'error': 'Já existe outra etiqueta com este número de patrimônio'
+                    }
+                
+                campos.append('NumeroPatrimonio')
+                valores.append(numero_patrimonio)
                 placeholders.append('%s')
             
             if dados.get('Foto'):

@@ -10,6 +10,25 @@
   --rfid-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
 }
 
+/* Tooltips customizados */
+.form-label[title],
+.form-input[title] {
+  position: relative;
+}
+
+/* Estilo melhorado para tooltips nativos em todos os navegadores */
+.form-label,
+.form-input {
+  cursor: help;
+}
+
+/* Força quebra de linha em tooltips (apenas funciona em alguns navegadores modernos) */
+.form-label[title]::after,
+.form-input[title]::after {
+  white-space: pre-wrap;
+  max-width: 300px;
+}
+
 /* Layout customizado */
 .rfid-custom-layout {
   background-color: #f8f9fa !important;

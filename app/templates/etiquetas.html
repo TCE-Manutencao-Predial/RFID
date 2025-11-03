@@ -181,7 +181,7 @@
             <input type="hidden" id="etiquetaCodigoCompleto" value="" />
 
             <div class="form-group">
-              <label class="form-label" title="O sistema remove automaticamente prefixos comuns ao exibir. O código completo será preservado ao salvar."> 
+              <label class="form-label" title="Prefixos comuns são removidos&#10;automaticamente na exibição.&#10;O código completo é preservado."> 
                 Código RFID <span class="required">*</span> 
                 <i class="fas fa-info-circle" style="font-size: 0.85rem; color: var(--rfid-info); cursor: help;"></i>
               </label>
@@ -191,7 +191,7 @@
                 class="form-input" 
                 placeholder="Ex: 18733 ou código completo" 
                 required 
-                title="Digite apenas o sufixo ou código completo. Prefixos conhecidos são removidos automaticamente para visualização." />
+                title="Digite o sufixo curto ou código completo.&#10;Prefixos são tratados automaticamente." />
             </div>
 
             <div class="form-group">
@@ -202,7 +202,7 @@
             <!-- Campos lado a lado -->
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
               <div class="form-group">
-                <label class="form-label" title="Número de série do equipamento ou material (campo opcional)"> 
+                <label class="form-label" title="Identificação única do equipamento.&#10;Campo opcional.&#10;Não pode ser duplicado."> 
                   Número de Série (opcional)
                   <i class="fas fa-info-circle" style="font-size: 0.85rem; color: var(--rfid-info); cursor: help;"></i>
                 </label>
@@ -212,11 +212,11 @@
                   class="form-input" 
                   placeholder="Ex: SN123456789" 
                   maxlength="100"
-                  title="Identificação única do equipamento/material. Deve ser único no sistema." />
+                  title="Número de série único do equipamento" />
               </div>
 
               <div class="form-group">
-                <label class="form-label" title="Número de patrimônio do equipamento ou material (campo opcional)"> 
+                <label class="form-label" title="Número de controle patrimonial.&#10;Campo opcional.&#10;Não pode ser duplicado."> 
                   Número de Patrimônio (opcional)
                   <i class="fas fa-info-circle" style="font-size: 0.85rem; color: var(--rfid-info); cursor: help;"></i>
                 </label>
@@ -226,7 +226,7 @@
                   class="form-input" 
                   placeholder="Ex: PAT-2024-001" 
                   maxlength="100"
-                  title="Número de controle patrimonial. Deve ser único no sistema." />
+                  title="Número único de patrimônio" />
               </div>
             </div>
 
