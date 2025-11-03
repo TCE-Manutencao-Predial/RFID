@@ -424,37 +424,6 @@ def obter_estatisticas():
             'error': f'Erro interno: {str(e)}'
         }), 500
 
-@api_bp.route('/migrations/status', methods=['GET'])
-def get_migrations_status():
-    """
-    Retorna o status das migrations executadas na inicialização.
-    
-    Returns:
-        JSON com informações sobre as migrations executadas
-    """
-    try:
-        gerenciador = current_app.config.get('GERENCIADOR_RFID')
-        if not gerenciador:
-            return jsonify({
-                'success': False,
-                'error': 'Gerenciador não inicializado'
-            }), 500
-        
-        status = gerenciador.get_migration_status()
-        
-        return jsonify({
-            'success': True,
-            'migration_status': status
-        })
-        
-    except Exception as e:
-        logger.error(f"Erro ao obter status de migrations: {str(e)}")
-        logger.error(f"Traceback: {traceback.format_exc()}")
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
-
 # Rota de teste/debug
 @api_bp.route('/test', methods=['GET'])
 def test_api():

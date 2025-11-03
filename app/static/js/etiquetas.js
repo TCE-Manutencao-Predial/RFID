@@ -88,7 +88,6 @@ function showToast(message, type = "info", title = "") {
 document.addEventListener("DOMContentLoaded", function () {
   inicializarEventos();
   carregarDados();
-  verificarMigrations();
 });
 
 function inicializarEventos() {
@@ -739,53 +738,6 @@ async function atualizarEstatisticas() {
     }
   } catch (error) {
     console.error("Erro ao atualizar estatísticas:", error);
-  }
-}
-
-// Verificar e exibir status das migrations
-async function verificarMigrations() {
-  try {
-    const response = await fetch("/RFID/api/migrations/status");
-    const result = await response.json();
-
-    if (result.success && result.migration_status) {
-      const status = result.migration_status;
-      
-      // Verificar se há mensagens para exibir
-      if (status.executed && status.messages && status.messages.length > 0) {
-        // Filtrar mensagens relevantes (que indicam mudanças)
-        const relevantMessages = status.messages.filter(msg => 
-          msg.includes('adicionada') || 
-          msg.includes('criado') || 
-          msg.includes('✓')
-        );
-        
-        if (relevantMessages.length > 0) {
-          // Há migrations executadas - mostrar notificação
-          const messageText = relevantMessages.join('\n');
-          
-          if (status.success) {
-            showToast(
-              `Banco de dados atualizado:\n${messageText}`, 
-              'success',
-              'Atualização Automática'
-            );
-          } else {
-            showToast(
-              `Atenção ao atualizar banco de dados:\n${messageText}`, 
-              'warning',
-              'Atualização Automática'
-            );
-          }
-        } else {
-          // Nenhuma alteração foi necessária
-          console.log("Banco de dados já está atualizado");
-        }
-      }
-    }
-  } catch (error) {
-    console.error("Erro ao verificar migrations:", error);
-    // Não mostrar toast de erro aqui para não atrapalhar o usuário
   }
 }
 

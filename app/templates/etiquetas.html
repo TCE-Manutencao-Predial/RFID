@@ -190,16 +190,19 @@
               <textarea id="etiquetaDescricao" class="form-textarea" placeholder="Digite uma descrição para a etiqueta..."></textarea>
             </div>
 
-            <div class="form-group">
-              <label class="form-label"> Número de Série </label>
-              <input type="text" id="etiquetaNumeroSerie" class="form-input" placeholder="Ex: SN123456789" maxlength="100" />
-              <div class="form-hint">Número de série do equipamento/material (opcional)</div>
-            </div>
+            <!-- Campos lado a lado -->
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+              <div class="form-group">
+                <label class="form-label"> Número de Série </label>
+                <input type="text" id="etiquetaNumeroSerie" class="form-input" placeholder="Ex: SN123456789" maxlength="100" />
+                <div class="form-hint">Número de série (opcional)</div>
+              </div>
 
-            <div class="form-group">
-              <label class="form-label"> Número de Patrimônio </label>
-              <input type="text" id="etiquetaNumeroPatrimonio" class="form-input" placeholder="Ex: PAT-2024-001" maxlength="100" />
-              <div class="form-hint">Número de patrimônio do equipamento/material (opcional)</div>
+              <div class="form-group">
+                <label class="form-label"> Número de Patrimônio </label>
+                <input type="text" id="etiquetaNumeroPatrimonio" class="form-input" placeholder="Ex: PAT-2024-001" maxlength="100" />
+                <div class="form-hint">Número de patrimônio (opcional)</div>
+              </div>
             </div>
 
             <div class="form-group">

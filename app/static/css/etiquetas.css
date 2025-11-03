@@ -714,7 +714,8 @@
   max-width: 600px;
   width: 90%;
   max-height: 90vh;
-  overflow: hidden;
+  display: flex;
+  flex-direction: column;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
   transition: transform 0.3s ease;
 }
@@ -730,6 +731,7 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
+  flex-shrink: 0;
 }
 
 .modal-title {
@@ -764,7 +766,8 @@
 .modal-body {
   padding: 25px;
   overflow-y: auto;
-  max-height: calc(90vh - 140px);
+  flex: 1;
+  min-height: 0;
 }
 
 .form-group {
@@ -829,6 +832,7 @@
   justify-content: flex-end;
   gap: 10px;
   border-top: 1px solid var(--rfid-border);
+  flex-shrink: 0;
 }
 
 .btn-cancel {
