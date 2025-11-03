@@ -67,8 +67,10 @@ def obter_competencias_usuario(usuario_htpasswd):
                 response_tecnico = requests.get(url_tecnico, timeout=5, verify=False)
                 if response_tecnico.status_code == 200:
                     tecnicos = response_tecnico.json()
+                    usuario_lower = usuario_htpasswd.lower()
                     for tecnico in tecnicos:
-                        if tecnico.get('nome_usuario_htpasswd', '').lower() == usuario_htpasswd.lower():
+                        nome_usuario = tecnico.get('nome_usuario_htpasswd')
+                        if nome_usuario and nome_usuario.lower() == usuario_lower:
                             competencias = tecnico.get('funcoes', [])
                             break
             
@@ -83,6 +85,9 @@ def obter_competencias_usuario(usuario_htpasswd):
             
     except requests.exceptions.RequestException as e:
         logger.error(f"Erro ao consultar API do HelpDesk Monitor para {usuario_htpasswd}: {e}")
+        return []
+    except Exception as e:
+        logger.error(f"Erro inesperado ao obter competências para {usuario_htpasswd}: {e}")
         return []
 
 def usuario_tem_competencia(competencia_requerida):
