@@ -158,7 +158,11 @@ async function carregarDados(forceRefresh = false, showToastMessage = false) {
     }
   } catch (error) {
     console.error("Erro:", error);
-    mostrarErro(error.message);
+    // Verificar se é erro 500 (timeout) e não exibir botão de retry
+    const isTimeout = error.message.includes('timeout') || 
+                     error.message.includes('execution time exceeded') ||
+                     error.message.includes('500');
+    mostrarErro(error.message, isTimeout);
     showToast(error.message, "error");
   }
 }
@@ -732,16 +736,22 @@ function mostrarLoading() {
   document.getElementById("paginacao").style.display = "none";
 }
 
-function mostrarErro(mensagem, detalhe = "") {
+function mostrarErro(mensagem, detalhe = "", isTimeout = false) {
   const emptyState = document.getElementById("emptyState");
+  
+  // Se for erro de timeout (500), não exibir botão de tentar novamente
+  const botaoRetry = isTimeout ? '' : `
+    <button class="rfid-btn rfid-btn-primary" onclick="carregarDados()">
+        <i class="fas fa-redo"></i> Tentar Novamente
+    </button>
+  `;
+  
   emptyState.innerHTML = `
     <i class="fas fa-exclamation-triangle" style="color: var(--rfid-danger);"></i>
     <h3>Erro ao carregar dados</h3>
     <p>${mensagem}</p>
     ${detalhe ? `<p style="font-size: 0.85rem; color: #6c757d; margin-top: 10px;">${detalhe}</p>` : ""}
-    <button class="rfid-btn rfid-btn-primary" onclick="carregarDados()">
-        <i class="fas fa-redo"></i> Tentar Novamente
-    </button>
+    ${botaoRetry}
   `;
   emptyState.style.display = "block";
   document.getElementById("loadingState").style.display = "none";

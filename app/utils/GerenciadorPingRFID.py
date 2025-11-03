@@ -114,9 +114,9 @@ class GerenciadorPingRFID:
             connection = mysql.connector.connect(**connection_params)
             
             # Configurar timeout de execução de query
-            # 30 segundos para queries que podem envolver BLOBs (fotos)
+            # 60 segundos para queries complexas de PING (incluindo ORDER BY DESC com BLOB)
             cursor = connection.cursor()
-            cursor.execute("SET SESSION MAX_EXECUTION_TIME=30000")  # 30 segundos em ms
+            cursor.execute("SET SESSION MAX_EXECUTION_TIME=60000")  # 60 segundos em ms
             cursor.close()
             
             return connection
@@ -219,6 +219,8 @@ class GerenciadorPingRFID:
                 cursor = connection.cursor(dictionary=True)
                 
                 # Query otimizada: buscar apenas os dados necessários
+                # IMPORTANTE: INDEX necessário: (EtiquetaRFID_hex, Foto, Horario DESC)
+                # Isso permite usar o índice para filtrar e ordenar sem filesort
                 data_query = f"""
                     SELECT 
                         l.CodigoLeitor,
