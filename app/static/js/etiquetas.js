@@ -3,6 +3,41 @@ let paginaAtual = 1;
 const registrosPorPagina = 20;
 let totalRegistros = 0;
 
+/**
+ * Formata código de etiqueta RFID removendo prefixos conhecidos
+ * Mantém o código original intacto em data-attributes para edição
+ * @param {string} codigoRFID - Código completo da etiqueta
+ * @returns {string} - Código formatado para visualização
+ */
+function formatarEtiquetaRFID(codigoRFID) {
+  if (!codigoRFID) return "-";
+  
+  const codigo = codigoRFID.toUpperCase();
+  
+  // Padrões conhecidos (ordenados do mais específico ao mais genérico)
+  const padroes = [
+    // Padrão: AAA0AAAA seguido de zeros e sufixo
+    { regex: /^[A-F0-9]{8}0+([A-F0-9]{4,})$/, grupo: 1 },
+    // Padrão: 32366259FC0000400000 seguido de sufixo
+    { regex: /^32366259FC0{4}40{4}([A-F0-9]{4,})$/i, grupo: 1 },
+    // Padrão: 6170617200000000 seguido de sufixo
+    { regex: /^61706172(0{8,})([A-F0-9]{4,})$/i, grupo: 2 },
+    // Padrão: zeros seguidos de sufixo (pelo menos 4 dígitos)
+    { regex: /^0+([A-F0-9]{4,})$/, grupo: 1 },
+  ];
+  
+  // Tentar cada padrão
+  for (const padrao of padroes) {
+    const match = codigo.match(padrao.regex);
+    if (match && match[padrao.grupo]) {
+      return match[padrao.grupo];
+    }
+  }
+  
+  // Se não corresponder a nenhum padrão, retornar o código completo
+  return codigoRFID;
+}
+
 // Sistema de Toast
 function showToast(message, type = "info", title = "") {
   const toastContainer = document.getElementById("toastContainer");
@@ -250,7 +285,13 @@ function renderizarTabela(etiquetas) {
     }
 
     tr.innerHTML = `
-                    <td><span class="rfid-etiqueta">${etiqueta.EtiquetaRFID_hex || "-"}</span></td>
+                    <td>
+                        <span class="rfid-etiqueta" 
+                              data-codigo-completo="${etiqueta.EtiquetaRFID_hex || ""}"
+                              title="Código completo: ${etiqueta.EtiquetaRFID_hex || ""}">
+                            ${formatarEtiquetaRFID(etiqueta.EtiquetaRFID_hex)}
+                        </span>
+                    </td>
                     <td>${etiqueta.Descricao || "-"}</td>
                     <td ${statusTooltip}>${statusBadge}</td>
                     <td>
@@ -675,96 +716,7 @@ async function atualizarEstatisticas() {
 }
 
 // Modificar a função renderizarTabela para incluir botões de ação
-function renderizarTabela(etiquetas) {
-  const tbody = document.getElementById("tabelaCorpo");
-  const tabela = document.getElementById("tabelaEtiquetas");
-  const emptyState = document.getElementById("emptyState");
-  const loadingState = document.getElementById("loadingState");
-  const paginacao = document.getElementById("paginacao");
-
-  loadingState.style.display = "none";
-
-  if (etiquetas.length === 0) {
-    tabela.style.display = "none";
-    paginacao.style.display = "none";
-    emptyState.style.display = "block";
-    return;
-  }
-
-  emptyState.style.display = "none";
-  tabela.style.display = "table";
-  paginacao.style.display = "flex";
-
-  tbody.innerHTML = "";
-
-  etiquetas.forEach((etiqueta) => {
-    const tr = document.createElement("tr");
-
-    // Determinar status baseado no campo ativa do backend
-    let statusBadge;
-    let statusTooltip = "";
-    let acoesBtns = "";
-
-    // Usar o campo 'ativa' que vem do backend
-    if (etiqueta.ativa === false) {
-      // Etiqueta destruída
-      statusBadge = '<span class="rfid-badge rfid-badge-destroyed">Destruída</span>';
-      if (etiqueta.data_destruicao_formatada) {
-        statusTooltip = `title="Destruída em ${etiqueta.data_destruicao_formatada}"`;
-      }
-
-      // Ações para etiqueta destruída
-      acoesBtns = `
-                        <button class="rfid-action-btn rfid-action-btn-warning" 
-                                onclick="editarEtiqueta(${etiqueta.id_listaEtiquetasRFID}, '${etiqueta.EtiquetaRFID_hex}', '${etiqueta.Descricao || ""}')"
-                                title="Editar etiqueta">
-                            <i class="fas fa-edit"></i> Editar
-                        </button>
-                        <button class="rfid-action-btn rfid-action-btn-success" 
-                                onclick="restaurarEtiqueta(${etiqueta.id_listaEtiquetasRFID}, '${etiqueta.EtiquetaRFID_hex}')"
-                                title="Restaurar etiqueta">
-                            <i class="fas fa-undo"></i> Restaurar
-                        </button>
-                    `;
-    } else {
-      // Etiqueta ativa
-      statusBadge = '<span class="rfid-badge rfid-badge-active">Ativa</span>';
-      statusTooltip = 'title="Etiqueta ativa"';
-
-      // Ações para etiqueta ativa
-      acoesBtns = `
-                        <button class="rfid-action-btn rfid-action-btn-primary" 
-                                onclick="editarEtiqueta(${etiqueta.id_listaEtiquetasRFID}, '${etiqueta.EtiquetaRFID_hex}', '${etiqueta.Descricao || ""}')"
-                                title="Editar etiqueta">
-                            <i class="fas fa-edit"></i> Editar
-                        </button>
-                        <button class="rfid-action-btn rfid-action-btn-danger" 
-                                onclick="destruirEtiqueta(${etiqueta.id_listaEtiquetasRFID}, '${etiqueta.EtiquetaRFID_hex}')"
-                                title="Destruir etiqueta">
-                            <i class="fas fa-trash"></i> Destruir
-                        </button>
-                    `;
-    }
-
-    tr.innerHTML = `
-                    <td><span class="rfid-etiqueta">${etiqueta.EtiquetaRFID_hex || "-"}</span></td>
-                    <td>${etiqueta.Descricao || "-"}</td>
-                    <td ${statusTooltip}>${statusBadge}</td>
-                    <td>
-                        <div class="rfid-actions">
-                            ${acoesBtns}
-                        </div>
-                    </td>
-                `;
-
-    // Adicionar classe visual para etiquetas destruídas
-    if (etiqueta.ativa === false) {
-      tr.classList.add("etiqueta-destruida");
-    }
-
-    tbody.appendChild(tr);
-  });
-}
+// REMOVIDA - Usar a função renderizarTabela definida anteriormente no arquivo
 
 // Fechar modal ao clicar fora
 /*window.onclick = function (event) {

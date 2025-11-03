@@ -9,6 +9,50 @@ let autoRefreshInterval = null;
 let antenasDisponiveis = [];
 let lastScrollY = 0;
 
+/**
+ * Formata código de etiqueta RFID removendo prefixos conhecidos
+ * Mantém o código original intacto em data-attributes para edição
+ * @param {string} codigoRFID - Código completo da etiqueta
+ * @returns {string} - Código formatado para visualização
+ */
+function formatarEtiquetaRFID(codigoRFID) {
+  if (!codigoRFID) return "-";
+  
+  const codigo = codigoRFID.toUpperCase();
+  
+  // Padrões conhecidos (ordenados do mais específico ao mais genérico)
+  const padroes = [
+    // Padrão: AAA0AAAA seguido de zeros e sufixo
+    { regex: /^[A-F0-9]{8}0+([A-F0-9]{4,})$/, grupo: 1 },
+    // Padrão: 32366259FC0000400000 seguido de sufixo
+    { regex: /^32366259FC0{4}40{4}([A-F0-9]{4,})$/i, grupo: 1 },
+    // Padrão: 6170617200000000 seguido de sufixo
+    { regex: /^61706172(0{8,})([A-F0-9]{4,})$/i, grupo: 2 },
+    // Padrão: zeros seguidos de sufixo (pelo menos 4 dígitos)
+    { regex: /^0+([A-F0-9]{4,})$/, grupo: 1 },
+    // Padrão: PING_PERIODICO_ - manter como está
+    { regex: /^PING_PERIODICO_/i, grupo: 0 },
+  ];
+  
+  // Tentar cada padrão
+  for (const padrao of padroes) {
+    if (padrao.grupo === 0) {
+      // Retornar código completo para PINGs
+      if (codigo.match(padrao.regex)) {
+        return codigoRFID;
+      }
+    } else {
+      const match = codigo.match(padrao.regex);
+      if (match && match[padrao.grupo]) {
+        return match[padrao.grupo];
+      }
+    }
+  }
+  
+  // Se não corresponder a nenhum padrão, retornar o código completo
+  return codigoRFID;
+}
+
 // Sistema de Toast
 function showToast(message, type = "info", title = "") {
   const toastContainer = document.getElementById("toastContainer");

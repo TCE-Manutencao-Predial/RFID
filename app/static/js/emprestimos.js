@@ -9,6 +9,41 @@ let cacheFuncionarios = new Map();
 let cacheTimestamp = null;
 const CACHE_DURATION = 5 * 60 * 1000; // 5 minutos
 
+/**
+ * Formata código de etiqueta RFID removendo prefixos conhecidos
+ * Mantém o código original intacto em data-attributes para edição
+ * @param {string} codigoRFID - Código completo da etiqueta
+ * @returns {string} - Código formatado para visualização
+ */
+function formatarEtiquetaRFID(codigoRFID) {
+  if (!codigoRFID) return "-";
+  
+  const codigo = codigoRFID.toUpperCase();
+  
+  // Padrões conhecidos (ordenados do mais específico ao mais genérico)
+  const padroes = [
+    // Padrão: AAA0AAAA seguido de zeros e sufixo
+    { regex: /^[A-F0-9]{8}0+([A-F0-9]{4,})$/, grupo: 1 },
+    // Padrão: 32366259FC0000400000 seguido de sufixo
+    { regex: /^32366259FC0{4}40{4}([A-F0-9]{4,})$/i, grupo: 1 },
+    // Padrão: 6170617200000000 seguido de sufixo
+    { regex: /^61706172(0{8,})([A-F0-9]{4,})$/i, grupo: 2 },
+    // Padrão: zeros seguidos de sufixo (pelo menos 4 dígitos)
+    { regex: /^0+([A-F0-9]{4,})$/, grupo: 1 },
+  ];
+  
+  // Tentar cada padrão
+  for (const padrao of padroes) {
+    const match = codigo.match(padrao.regex);
+    if (match && match[padrao.grupo]) {
+      return match[padrao.grupo];
+    }
+  }
+  
+  // Se não corresponder a nenhum padrão, retornar o código completo
+  return codigoRFID;
+}
+
 // Sistema de Toast (reutilizado do etiquetas.js)
 function showToast(message, type = "info", title = "") {
   const toastContainer = document.getElementById("toastContainer");
@@ -456,7 +491,11 @@ function renderizarTabela(emprestimos) {
       <td>${emprestimo.id}</td>
       <td title="${nomeColaborador}">${nomeColaborador}</td>
       <td>
-        <span class="rfid-etiqueta">${emprestimo.EtiquetaRFID_hex}</span>
+        <span class="rfid-etiqueta" 
+              data-codigo-completo="${emprestimo.EtiquetaRFID_hex}"
+              title="Código completo: ${emprestimo.EtiquetaRFID_hex}">
+          ${formatarEtiquetaRFID(emprestimo.EtiquetaRFID_hex)}
+        </span>
         <br>
         <small>${emprestimo.descricao_ferramenta || "-"}</small>
       </td>
@@ -840,7 +879,8 @@ async function abrirModalPendentes() {
                 <strong>Colaborador:</strong> ${nomeColaborador}
               </div>
               <div class="pendente-detail">
-                <strong>Etiqueta:</strong> ${emp.EtiquetaRFID_hex}
+                <strong>Etiqueta:</strong> 
+                <span title="${emp.EtiquetaRFID_hex}">${formatarEtiquetaRFID(emp.EtiquetaRFID_hex)}</span>
               </div>
               <div class="pendente-detail">
                 <strong>Tempo:</strong> <span class="${tempo.alerta ? "tempo-alerta" : ""}">${tempo.texto}</span>
@@ -929,7 +969,9 @@ async function visualizarDetalhes(id) {
                 <div class="info-devolucao">
                   <p><strong>ID do Empréstimo:</strong> ${emprestimo.id}</p>
                   <p><strong>Colaborador:</strong> ${obterNomeFuncionario(emprestimo.id_colaborador)}</p>
-                  <p><strong>Ferramenta:</strong> ${emprestimo.EtiquetaRFID_hex}</p>
+                  <p><strong>Ferramenta:</strong> 
+                    <span title="${emprestimo.EtiquetaRFID_hex}">${formatarEtiquetaRFID(emprestimo.EtiquetaRFID_hex)}</span>
+                  </p>
                   <p><strong>Descrição:</strong> ${emprestimo.descricao_ferramenta || "Sem descrição"}</p>
                   <p><strong>Data do Empréstimo:</strong> ${emprestimo.dataEmprestimo_formatada}</p>
                   <p><strong>Data da Devolução:</strong> ${emprestimo.dataDevolucao_formatada || "Não devolvido"}</p>
@@ -1120,7 +1162,9 @@ async function buscarFerramentas() {
         const item = document.createElement("div");
         item.className = "suggestion-item";
         item.innerHTML = `
-          <div class="etiqueta-codigo">${etiqueta.EtiquetaRFID_hex}</div>
+          <div class="etiqueta-codigo" title="${etiqueta.EtiquetaRFID_hex}">
+            ${formatarEtiquetaRFID(etiqueta.EtiquetaRFID_hex)}
+          </div>
           <div class="etiqueta-descricao">${etiqueta.Descricao || "Sem descrição"}</div>
         `;
         
