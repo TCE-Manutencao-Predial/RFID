@@ -146,6 +146,16 @@
 
       <!-- Tabela -->
       <div class="rfid-table-container">
+        <!-- Paginação (movida para cima) -->
+        <div class="rfid-pagination" id="paginacao" style="display: none; margin-bottom: 15px;">
+          <div class="rfid-pagination-info">
+            Mostrando <span id="registroInicio">0</span> a <span id="registroFim">0</span> de <span id="registroTotal">0</span> registros
+          </div>
+          <div class="rfid-pagination-controls" id="paginacaoControles">
+            <!-- Controles de paginação serão inseridos via JavaScript -->
+          </div>
+        </div>
+
         <div id="loadingState" class="rfid-loading" style="display: none">
           <i class="fas fa-spinner"></i>
           <p>Carregando leituras...</p>
@@ -173,15 +183,6 @@
             <!-- Registros serão inseridos via JavaScript -->
           </tbody>
         </table>
-
-        <div class="rfid-pagination" id="paginacao" style="display: none">
-          <div class="rfid-pagination-info">
-            Mostrando <span id="registroInicio">0</span> a <span id="registroFim">0</span> de <span id="registroTotal">0</span> registros
-          </div>
-          <div class="rfid-pagination-controls" id="paginacaoControles">
-            <!-- Controles de paginação serão inseridos via JavaScript -->
-          </div>
-        </div>
       </div>
     </main>
 
