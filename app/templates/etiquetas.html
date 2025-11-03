@@ -178,11 +178,20 @@
         <form id="formEtiqueta" onsubmit="salvarEtiqueta(event)">
           <div class="modal-body">
             <input type="hidden" id="etiquetaId" value="" />
+            <input type="hidden" id="etiquetaCodigoCompleto" value="" />
 
             <div class="form-group">
-              <label class="form-label"> Código RFID <span class="required">*</span> </label>
-              <input type="text" id="etiquetaCodigo" class="form-input" placeholder="Ex: 617061720000000018733" required />
-              <div class="form-hint">Digite o código hexadecimal da etiqueta RFID</div>
+              <label class="form-label" title="O sistema remove automaticamente prefixos comuns ao exibir. O código completo será preservado ao salvar."> 
+                Código RFID <span class="required">*</span> 
+                <i class="fas fa-info-circle" style="font-size: 0.85rem; color: var(--rfid-info); cursor: help;"></i>
+              </label>
+              <input 
+                type="text" 
+                id="etiquetaCodigo" 
+                class="form-input" 
+                placeholder="Ex: 18733 ou código completo" 
+                required 
+                title="Digite apenas o sufixo ou código completo. Prefixos conhecidos são removidos automaticamente para visualização." />
             </div>
 
             <div class="form-group">
@@ -193,15 +202,31 @@
             <!-- Campos lado a lado -->
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
               <div class="form-group">
-                <label class="form-label"> Número de Série </label>
-                <input type="text" id="etiquetaNumeroSerie" class="form-input" placeholder="Ex: SN123456789" maxlength="100" />
-                <div class="form-hint">Número de série (opcional)</div>
+                <label class="form-label" title="Número de série do equipamento ou material (campo opcional)"> 
+                  Número de Série (opcional)
+                  <i class="fas fa-info-circle" style="font-size: 0.85rem; color: var(--rfid-info); cursor: help;"></i>
+                </label>
+                <input 
+                  type="text" 
+                  id="etiquetaNumeroSerie" 
+                  class="form-input" 
+                  placeholder="Ex: SN123456789" 
+                  maxlength="100"
+                  title="Identificação única do equipamento/material. Deve ser único no sistema." />
               </div>
 
               <div class="form-group">
-                <label class="form-label"> Número de Patrimônio </label>
-                <input type="text" id="etiquetaNumeroPatrimonio" class="form-input" placeholder="Ex: PAT-2024-001" maxlength="100" />
-                <div class="form-hint">Número de patrimônio (opcional)</div>
+                <label class="form-label" title="Número de patrimônio do equipamento ou material (campo opcional)"> 
+                  Número de Patrimônio (opcional)
+                  <i class="fas fa-info-circle" style="font-size: 0.85rem; color: var(--rfid-info); cursor: help;"></i>
+                </label>
+                <input 
+                  type="text" 
+                  id="etiquetaNumeroPatrimonio" 
+                  class="form-input" 
+                  placeholder="Ex: PAT-2024-001" 
+                  maxlength="100"
+                  title="Número de controle patrimonial. Deve ser único no sistema." />
               </div>
             </div>
 

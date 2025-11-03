@@ -415,6 +415,7 @@ function abrirModalNovaEtiqueta() {
   document.getElementById("modalTitulo").textContent = "Nova Etiqueta";
   document.getElementById("formEtiqueta").reset();
   document.getElementById("etiquetaId").value = "";
+  document.getElementById("etiquetaCodigoCompleto").value = "";
   document.getElementById("fotoPreview").style.display = "none";
   fotoBase64 = null;
   abrirModal("modalEtiqueta");
@@ -424,12 +425,17 @@ function abrirModalNovaEtiqueta() {
 function editarEtiqueta(id, codigo, descricao) {
   document.getElementById("modalTitulo").textContent = "Editar Etiqueta";
   document.getElementById("etiquetaId").value = id;
-  document.getElementById("etiquetaCodigo").value = codigo;
-  document.getElementById("etiquetaDescricao").value = descricao || "";
   document.getElementById("etiquetaNumeroSerie").value = "";
   document.getElementById("etiquetaNumeroPatrimonio").value = "";
   document.getElementById("fotoPreview").style.display = "none";
   fotoBase64 = null;
+  
+  // Armazenar código completo em campo oculto
+  document.getElementById("etiquetaCodigoCompleto").value = codigo;
+  
+  // Exibir apenas o código formatado (sem prefixo)
+  document.getElementById("etiquetaCodigo").value = formatarEtiquetaRFID(codigo);
+  document.getElementById("etiquetaDescricao").value = descricao || "";
   
   // Carregar dados completos da etiqueta incluindo NumeroSerie e NumeroPatrimonio
   fetch(`/RFID/api/etiquetas/${id}`)
@@ -438,6 +444,11 @@ function editarEtiqueta(id, codigo, descricao) {
       if (result.success && result.etiqueta) {
         document.getElementById("etiquetaNumeroSerie").value = result.etiqueta.NumeroSerie || "";
         document.getElementById("etiquetaNumeroPatrimonio").value = result.etiqueta.NumeroPatrimonio || "";
+        
+        // Atualizar código completo se vier da API
+        if (result.etiqueta.EtiquetaRFID_hex) {
+          document.getElementById("etiquetaCodigoCompleto").value = result.etiqueta.EtiquetaRFID_hex;
+        }
       }
     })
     .catch(error => {
@@ -553,26 +564,43 @@ function padronizarCodigoRFID(codigo) {
     }
 }
 
+// 3. NOVA FUNÇÃO: Reconstruir código completo a partir do código simplificado
+function reconstruirCodigoCompleto(codigoSimplificado, codigoCompletoOriginal) {
+    // Se o usuário digitou um código completo (24+ caracteres), usar como está
+    if (codigoSimplificado.length >= 24) {
+        return padronizarCodigoRFID(codigoSimplificado);
+    }
+    
+    // Se temos o código original e o usuário não mudou (apenas vê o formatado)
+    if (codigoCompletoOriginal && codigoCompletoOriginal.toUpperCase().includes(codigoSimplificado.toUpperCase())) {
+        return codigoCompletoOriginal;
+    }
+    
+    // Se é um código novo/alterado, aplicar padding padrão
+    return padronizarCodigoRFID(codigoSimplificado);
+}
+
 // Salvar etiqueta (criar ou editar)
 async function salvarEtiqueta(event) {
     event.preventDefault();
     
     const id = document.getElementById('etiquetaId').value;
-    let codigo = document.getElementById('etiquetaCodigo').value.trim();
+    let codigoVisual = document.getElementById('etiquetaCodigo').value.trim();
+    const codigoCompletoOriginal = document.getElementById('etiquetaCodigoCompleto').value;
     const descricao = document.getElementById('etiquetaDescricao').value.trim();
     const numeroSerie = document.getElementById('etiquetaNumeroSerie').value.trim();
     const numeroPatrimonio = document.getElementById('etiquetaNumeroPatrimonio').value.trim();
     
-    if (!codigo) {
+    if (!codigoVisual) {
         showToast('O código da etiqueta é obrigatório', 'error');
         return;
     }
     
-    // APLICAR PADDING DE ZEROS
-    codigo = padronizarCodigoRFID(codigo);
+    // Reconstruir código completo (preserva prefixo se estava editando, ou adiciona se é novo)
+    const codigoCompleto = reconstruirCodigoCompleto(codigoVisual, codigoCompletoOriginal);
     
-    // Atualizar o campo visual para mostrar o código completo
-    document.getElementById('etiquetaCodigo').value = codigo;
+    // Atualizar campo oculto com código completo
+    document.getElementById('etiquetaCodigoCompleto').value = codigoCompleto;
     
     const btnSalvar = document.getElementById('btnSalvarEtiqueta');
     btnSalvar.classList.add('btn-loading');
@@ -581,7 +609,7 @@ async function salvarEtiqueta(event) {
     try {
         let response;
         const dados = {
-            EtiquetaRFID_hex: codigo,
+            EtiquetaRFID_hex: codigoCompleto,
             Descricao: descricao
         };
         
