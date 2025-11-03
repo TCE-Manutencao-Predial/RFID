@@ -88,6 +88,7 @@ function showToast(message, type = "info", title = "") {
 document.addEventListener("DOMContentLoaded", function () {
   inicializarEventos();
   carregarDados();
+  verificarMigrations();
 });
 
 function inicializarEventos() {
@@ -426,8 +427,24 @@ function editarEtiqueta(id, codigo, descricao) {
   document.getElementById("etiquetaId").value = id;
   document.getElementById("etiquetaCodigo").value = codigo;
   document.getElementById("etiquetaDescricao").value = descricao || "";
+  document.getElementById("etiquetaNumeroSerie").value = "";
+  document.getElementById("etiquetaNumeroPatrimonio").value = "";
   document.getElementById("fotoPreview").style.display = "none";
   fotoBase64 = null;
+  
+  // Carregar dados completos da etiqueta incluindo NumeroSerie e NumeroPatrimonio
+  fetch(`/RFID/api/etiquetas/${id}`)
+    .then(response => response.json())
+    .then(result => {
+      if (result.success && result.etiqueta) {
+        document.getElementById("etiquetaNumeroSerie").value = result.etiqueta.NumeroSerie || "";
+        document.getElementById("etiquetaNumeroPatrimonio").value = result.etiqueta.NumeroPatrimonio || "";
+      }
+    })
+    .catch(error => {
+      console.error("Erro ao carregar dados da etiqueta:", error);
+    });
+  
   abrirModal("modalEtiqueta");
 }
 
@@ -544,6 +561,8 @@ async function salvarEtiqueta(event) {
     const id = document.getElementById('etiquetaId').value;
     let codigo = document.getElementById('etiquetaCodigo').value.trim();
     const descricao = document.getElementById('etiquetaDescricao').value.trim();
+    const numeroSerie = document.getElementById('etiquetaNumeroSerie').value.trim();
+    const numeroPatrimonio = document.getElementById('etiquetaNumeroPatrimonio').value.trim();
     
     if (!codigo) {
         showToast('O código da etiqueta é obrigatório', 'error');
@@ -566,6 +585,14 @@ async function salvarEtiqueta(event) {
             EtiquetaRFID_hex: codigo,
             Descricao: descricao
         };
+        
+        // Adicionar NumeroSerie e NumeroPatrimonio se preenchidos
+        if (numeroSerie) {
+            dados.NumeroSerie = numeroSerie;
+        }
+        if (numeroPatrimonio) {
+            dados.NumeroPatrimonio = numeroPatrimonio;
+        }
         
         if (fotoBase64) {
             dados.Foto = fotoBase64;
@@ -712,6 +739,53 @@ async function atualizarEstatisticas() {
     }
   } catch (error) {
     console.error("Erro ao atualizar estatísticas:", error);
+  }
+}
+
+// Verificar e exibir status das migrations
+async function verificarMigrations() {
+  try {
+    const response = await fetch("/RFID/api/migrations/status");
+    const result = await response.json();
+
+    if (result.success && result.migration_status) {
+      const status = result.migration_status;
+      
+      // Verificar se há mensagens para exibir
+      if (status.executed && status.messages && status.messages.length > 0) {
+        // Filtrar mensagens relevantes (que indicam mudanças)
+        const relevantMessages = status.messages.filter(msg => 
+          msg.includes('adicionada') || 
+          msg.includes('criado') || 
+          msg.includes('✓')
+        );
+        
+        if (relevantMessages.length > 0) {
+          // Há migrations executadas - mostrar notificação
+          const messageText = relevantMessages.join('\n');
+          
+          if (status.success) {
+            showToast(
+              `Banco de dados atualizado:\n${messageText}`, 
+              'success',
+              'Atualização Automática'
+            );
+          } else {
+            showToast(
+              `Atenção ao atualizar banco de dados:\n${messageText}`, 
+              'warning',
+              'Atualização Automática'
+            );
+          }
+        } else {
+          // Nenhuma alteração foi necessária
+          console.log("Banco de dados já está atualizado");
+        }
+      }
+    }
+  } catch (error) {
+    console.error("Erro ao verificar migrations:", error);
+    // Não mostrar toast de erro aqui para não atrapalhar o usuário
   }
 }
 

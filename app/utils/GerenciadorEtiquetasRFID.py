@@ -9,7 +9,21 @@ import hashlib
 import base64
 
 class GerenciadorEtiquetasRFID:
-    """Gerenciador para operações com etiquetas RFID no MySQL com sistema de cache."""
+    """
+    Gerenciador para operações com etiquetas RFID no MySQL com sistema de cache.
+    
+    Features:
+    - Sistema de cache com timeout configurável
+    - Migrations automáticas na inicialização
+    - Validação de duplicidade para NumeroSerie e NumeroPatrimonio
+    - Logging detalhado de todas as operações
+    
+    Migrations:
+    - Executa automaticamente na inicialização (__init__)
+    - Verifica e cria colunas se não existirem
+    - Idempotente (pode ser executado múltiplas vezes)
+    - Status disponível via get_migration_status()
+    """
     
     _instance = None
     
@@ -32,7 +46,18 @@ class GerenciadorEtiquetasRFID:
         self.cache = {}
         self.cache_timeout = timedelta(minutes=5)  # Cache válido por 5 minutos
         
+        # Status das migrations
+        self.migration_status = {
+            'executed': False,
+            'success': False,
+            'messages': [],
+            'timestamp': None
+        }
+        
         self.logger.info("Gerenciador de Etiquetas RFID inicializado com cache")
+        
+        # Executar migrations automaticamente
+        self._run_migrations()
     
     def _get_cache_key(self, prefix, params=None):
         """Gera uma chave única para o cache baseada nos parâmetros."""
@@ -87,6 +112,140 @@ class GerenciadorEtiquetasRFID:
         except Error as e:
             self.logger.error(f"Erro ao conectar ao MySQL: {e}")
             raise
+    
+    def _run_migrations(self):
+        """
+        Executa migrations automáticas no banco de dados.
+        Verifica e adiciona colunas necessárias se não existirem.
+        """
+        self.migration_status['executed'] = True
+        self.migration_status['timestamp'] = datetime.now()
+        
+        try:
+            self.logger.info("Iniciando verificação de migrations...")
+            
+            # Migration 1: Adicionar colunas NumeroSerie e NumeroPatrimonio
+            result = self._migrate_add_serial_patrimonio_columns()
+            
+            if result['success']:
+                self.migration_status['success'] = True
+                self.migration_status['messages'].extend(result['messages'])
+                self.logger.info("Migrations executadas com sucesso")
+            else:
+                self.migration_status['success'] = False
+                self.migration_status['messages'].extend(result['messages'])
+                self.logger.warning("Migrations executadas com avisos")
+                
+        except Exception as e:
+            self.migration_status['success'] = False
+            self.migration_status['messages'].append(f"Erro ao executar migrations: {str(e)}")
+            self.logger.error(f"Erro durante migrations: {e}")
+    
+    def _migrate_add_serial_patrimonio_columns(self):
+        """
+        Migration: Adiciona colunas NumeroSerie e NumeroPatrimonio se não existirem.
+        
+        Returns:
+            dict: Resultado da migration com mensagens
+        """
+        connection = None
+        cursor = None
+        messages = []
+        
+        try:
+            connection = self._get_connection()
+            cursor = connection.cursor(dictionary=True)
+            
+            # Verificar estrutura da tabela
+            cursor.execute("DESCRIBE etiquetasRFID")
+            existing_columns = {row['Field']: row for row in cursor.fetchall()}
+            
+            columns_to_add = []
+            
+            # Verificar se NumeroSerie existe
+            if 'NumeroSerie' not in existing_columns:
+                columns_to_add.append({
+                    'name': 'NumeroSerie',
+                    'definition': "VARCHAR(100) NULL COMMENT 'Número de série do equipamento/material'",
+                    'index': 'idx_numero_serie'
+                })
+                messages.append("Coluna 'NumeroSerie' será adicionada")
+            else:
+                messages.append("Coluna 'NumeroSerie' já existe")
+            
+            # Verificar se NumeroPatrimonio existe
+            if 'NumeroPatrimonio' not in existing_columns:
+                columns_to_add.append({
+                    'name': 'NumeroPatrimonio',
+                    'definition': "VARCHAR(100) NULL COMMENT 'Número de patrimônio do equipamento/material'",
+                    'index': 'idx_numero_patrimonio'
+                })
+                messages.append("Coluna 'NumeroPatrimonio' será adicionada")
+            else:
+                messages.append("Coluna 'NumeroPatrimonio' já existe")
+            
+            # Adicionar colunas se necessário
+            if columns_to_add:
+                for col in columns_to_add:
+                    try:
+                        # Adicionar coluna
+                        alter_query = f"ALTER TABLE etiquetasRFID ADD COLUMN {col['name']} {col['definition']}"
+                        cursor.execute(alter_query)
+                        messages.append(f"✓ Coluna '{col['name']}' adicionada com sucesso")
+                        self.logger.info(f"Coluna {col['name']} adicionada")
+                        
+                        # Verificar se o índice já existe
+                        cursor.execute(f"SHOW INDEX FROM etiquetasRFID WHERE Key_name = '{col['index']}'")
+                        if not cursor.fetchall():
+                            # Adicionar índice único
+                            index_query = f"ALTER TABLE etiquetasRFID ADD UNIQUE KEY {col['index']} ({col['name']})"
+                            cursor.execute(index_query)
+                            messages.append(f"✓ Índice único '{col['index']}' criado")
+                            self.logger.info(f"Índice {col['index']} criado")
+                        else:
+                            messages.append(f"Índice '{col['index']}' já existe")
+                            
+                    except Error as e:
+                        error_msg = f"Erro ao adicionar coluna '{col['name']}': {str(e)}"
+                        messages.append(f"✗ {error_msg}")
+                        self.logger.error(error_msg)
+                        
+                        # Se for erro de coluna duplicada, não é crítico
+                        if "Duplicate column name" not in str(e):
+                            return {
+                                'success': False,
+                                'messages': messages
+                            }
+            else:
+                messages.append("Nenhuma alteração necessária - banco de dados atualizado")
+            
+            return {
+                'success': True,
+                'messages': messages
+            }
+            
+        except Error as e:
+            error_msg = f"Erro ao verificar/modificar estrutura da tabela: {str(e)}"
+            messages.append(f"✗ {error_msg}")
+            self.logger.error(error_msg)
+            return {
+                'success': False,
+                'messages': messages
+            }
+        finally:
+            if cursor:
+                cursor.close()
+            if connection:
+                connection.close()
+    
+    def get_migration_status(self):
+        """
+        Retorna o status das migrations executadas.
+        
+        Returns:
+            dict: Status das migrations
+        """
+        return self.migration_status.copy()
     
     def criar_etiqueta(self, dados):
         """
@@ -264,7 +423,9 @@ class GerenciadorEtiquetasRFID:
                         id_listaEtiquetasRFID,
                         EtiquetaRFID_hex,
                         Descricao,
-                        Destruida
+                        Destruida,
+                        NumeroSerie,
+                        NumeroPatrimonio
                     FROM etiquetasRFID
                     WHERE {where_clause}
                     ORDER BY id_listaEtiquetasRFID DESC
@@ -340,7 +501,9 @@ class GerenciadorEtiquetasRFID:
                     EtiquetaRFID_hex,
                     Foto,
                     Descricao,
-                    Destruida
+                    Destruida,
+                    NumeroSerie,
+                    NumeroPatrimonio
                 FROM etiquetasRFID
                 WHERE id_listaEtiquetasRFID = %s
             """
@@ -381,7 +544,7 @@ class GerenciadorEtiquetasRFID:
         
         Args:
             id_etiqueta (int): ID da etiqueta
-            dados (dict): Dados para atualizar (EtiquetaRFID_hex, Descricao, Destruida, Foto)
+            dados (dict): Dados para atualizar (EtiquetaRFID_hex, Descricao, Destruida, Foto, NumeroSerie, NumeroPatrimonio)
             
         Returns:
             dict: Resultado da operação
@@ -419,6 +582,54 @@ class GerenciadorEtiquetasRFID:
             if 'descricao' in dados or 'Descricao' in dados:
                 campos.append("Descricao = %s")
                 valores.append(dados.get('descricao') or dados.get('Descricao'))
+            
+            # Atualizar NumeroSerie (com validação de duplicidade)
+            if 'NumeroSerie' in dados:
+                numero_serie = dados['NumeroSerie']
+                if numero_serie:
+                    # Verificar se o número de série já existe em outra etiqueta
+                    check_query = """
+                        SELECT COUNT(*) FROM etiquetasRFID 
+                        WHERE NumeroSerie = %s AND id_listaEtiquetasRFID != %s
+                    """
+                    cursor.execute(check_query, (numero_serie, id_etiqueta))
+                    
+                    if cursor.fetchone()[0] > 0:
+                        return {
+                            'success': False,
+                            'error': 'Já existe outra etiqueta com este número de série'
+                        }
+                    
+                    campos.append("NumeroSerie = %s")
+                    valores.append(numero_serie)
+                else:
+                    # Se vazio, definir como NULL
+                    campos.append("NumeroSerie = %s")
+                    valores.append(None)
+            
+            # Atualizar NumeroPatrimonio (com validação de duplicidade)
+            if 'NumeroPatrimonio' in dados:
+                numero_patrimonio = dados['NumeroPatrimonio']
+                if numero_patrimonio:
+                    # Verificar se o número de patrimônio já existe em outra etiqueta
+                    check_query = """
+                        SELECT COUNT(*) FROM etiquetasRFID 
+                        WHERE NumeroPatrimonio = %s AND id_listaEtiquetasRFID != %s
+                    """
+                    cursor.execute(check_query, (numero_patrimonio, id_etiqueta))
+                    
+                    if cursor.fetchone()[0] > 0:
+                        return {
+                            'success': False,
+                            'error': 'Já existe outra etiqueta com este número de patrimônio'
+                        }
+                    
+                    campos.append("NumeroPatrimonio = %s")
+                    valores.append(numero_patrimonio)
+                else:
+                    # Se vazio, definir como NULL
+                    campos.append("NumeroPatrimonio = %s")
+                    valores.append(None)
             
             # Atualizar status (destruída)
             if 'destruida' in dados or 'Destruida' in dados:
