@@ -2,3 +2,6 @@ AuthType Basic
 AuthName "Área restrita"
 AuthUserFile /etc/httpd/.htpasswd
 Require valid-user
+
+# Garantir que o REMOTE_USER seja passado para o WSGI
+WSGIPassAuthorization On
