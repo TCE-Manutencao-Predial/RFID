@@ -2,6 +2,10 @@
 from flask import Blueprint, render_template, current_app, request, abort, jsonify
 import logging
 import requests
+import urllib3
+
+# Suprimir avisos de SSL
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 web_bp = Blueprint('web', __name__)
 logger = logging.getLogger('controlerfid.web')
@@ -48,9 +52,9 @@ def obter_competencias_usuario(usuario_htpasswd):
         return _cache_competencias[usuario_htpasswd]
     
     try:
-        # Consultar API do HelpDesk Monitor
+        # Consultar API do HelpDesk Monitor (ignorando verificação SSL)
         url = f"{HELPDESK_API_USUARIOS}/{usuario_htpasswd}"
-        response = requests.get(url, timeout=5)
+        response = requests.get(url, timeout=5, verify=False)
         
         if response.status_code == 200:
             dados = response.json()
@@ -60,7 +64,7 @@ def obter_competencias_usuario(usuario_htpasswd):
             # Se não houver funcoes direto, buscar nos técnicos
             if not competencias:
                 url_tecnico = f"{HELPDESK_API_BASE}/contatos_tecnicos"
-                response_tecnico = requests.get(url_tecnico, timeout=5)
+                response_tecnico = requests.get(url_tecnico, timeout=5, verify=False)
                 if response_tecnico.status_code == 200:
                     tecnicos = response_tecnico.json()
                     for tecnico in tecnicos:
