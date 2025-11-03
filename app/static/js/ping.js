@@ -193,9 +193,36 @@ async function carregarDados(forceRefresh = false, showToastMessage = false) {
       atualizarPaginacao();
       window.scrollTo(0, lastScrollY);
 
+      // Exibir informação sobre busca incremental
+      if (data.metodo === 'incremental') {
+        const avisoFiltro = document.getElementById('avisoFiltro30Dias');
+        if (avisoFiltro) {
+          avisoFiltro.style.display = 'block';
+          avisoFiltro.innerHTML = `<strong>ℹ️ Busca otimizada:</strong> Exibindo registros dos últimos ${data.dias_buscados || 7} dias (busca incremental). Use os filtros de data para pesquisar períodos específicos.`;
+        } else {
+          // Criar aviso se não existir
+          const aviso = document.createElement('div');
+          aviso.id = 'avisoFiltro30Dias';
+          aviso.className = 'alert alert-info';
+          aviso.style.cssText = 'margin: 10px 0; padding: 10px; background-color: #d1ecf1; border: 1px solid #bee5eb; border-radius: 4px; color: #0c5460;';
+          aviso.innerHTML = `<strong>ℹ️ Busca otimizada:</strong> Exibindo registros dos últimos ${data.dias_buscados || 7} dias (busca incremental). Use os filtros de data para pesquisar períodos específicos.`;
+          const tabela = document.querySelector('.tabela-wrapper');
+          if (tabela) {
+            tabela.parentNode.insertBefore(aviso, tabela);
+          }
+        }
+      } else {
+        // Esconder aviso se filtro de data foi aplicado manualmente
+        const avisoFiltro = document.getElementById('avisoFiltro30Dias');
+        if (avisoFiltro) {
+          avisoFiltro.style.display = 'none';
+        }
+      }
+
       if (showToastMessage && data.pings.length > 0) {
         const cacheInfo = data.from_cache ? " (do cache)" : " (atualizado)";
-        showToast(`${data.pings.length} registros de PING carregados${cacheInfo}`, "success");
+        const metodoInfo = data.metodo === 'incremental' ? ` em ${data.dias_buscados} dias` : '';
+        showToast(`${data.pings.length} registros de PING carregados${cacheInfo}${metodoInfo}`, "success");
       }
     } else {
       throw new Error(data.error || "Erro ao carregar dados");

@@ -2,57 +2,44 @@
 -- Autor: Sistema de otimização automática
 -- Data: 2025-11-03
 -- Objetivo: Acelerar queries da página de PING que estavam excedendo timeout
--- Versão: 2.0 - Otimizações para evitar "Sort aborted: maximum execution time exceeded"
+-- Versão: 4.0 - BUSCA INCREMENTAL (sem necessidade de novos índices)
 
 -- ============================================================================
--- ANÁLISE DO PROBLEMA
+-- ANÁLISE DO PROBLEMA E SOLUÇÃO
 -- ============================================================================
--- 1. Erro: "1028 (HY000): Sort aborted: Query execution was interrupted, maximum statement execution time exceeded"
--- 2. Query timeout de 30 segundos sendo excedido na ordenação DESC
--- 3. ORDER BY Horario DESC em tabela grande sem índice otimizado
--- 4. Necessário índice composto para evitar filesort
+-- PROBLEMA:
+-- 1. Erro: "1028 (HY000): Sort aborted: Query execution was interrupted"
+-- 2. ORDER BY Horario DESC em milhões de registros causava timeout
+-- 3. Criação de novos índices é demorada e bloqueia a tabela
+
+-- SOLUÇÃO IMPLEMENTADA (v4.0):
+-- Em vez de ORDER BY em toda a tabela, o sistema agora usa BUSCA INCREMENTAL:
+-- - Busca dados em chunks de 7 dias (dos mais recentes para os mais antigos)
+-- - Para cada chunk, ORDER BY é rápido (poucos registros por semana)
+-- - Para até encontrar a quantidade de registros solicitada
+-- - Máximo de 90 dias de busca
+
+-- VANTAGENS:
+-- ✅ Não precisa criar novos índices (economia de tempo e espaço)
+-- ✅ Usa os índices existentes eficientemente
+-- ✅ Performance previsível (cada chunk é pequeno)
+-- ✅ Não trava a tabela para criar índices
 
 -- ============================================================================
--- VERIFICAÇÃO ATUAL DE ÍNDICES
+-- ÍNDICES EXISTENTES (suficientes para busca incremental)
 -- ============================================================================
--- Execute primeiro para ver índices existentes:
--- SHOW INDEX FROM leitoresRFID;
+-- Os índices já criados na v2 são suficientes:
+-- - idx_ping_optimized_v2: (EtiquetaRFID_hex, Horario DESC, Foto, CodigoLeitor, Antena)
+
+-- VERIFICAR ÍNDICES EXISTENTES:
+SHOW INDEX FROM leitoresRFID WHERE Key_name LIKE '%ping%';
 
 -- ============================================================================
--- ÍNDICE PRINCIPAL PARA QUERIES DE PING (VERSÃO OTIMIZADA)
+-- NENHUMA AÇÃO NECESSÁRIA
 -- ============================================================================
--- Este índice cobre:
--- - Filtro: EtiquetaRFID_hex LIKE 'PING_PERIODICO_%'
--- - Filtro: Foto IS NOT NULL (através de índice NULL-aware)
--- - Ordem: Horario DESC (índice descendente para evitar filesort)
--- - Filtros adicionais: CodigoLeitor, Antena
-
--- Verificar se o índice antigo existe
-SELECT 
-    COUNT(*) as index_exists,
-    'idx_ping_optimized' as index_name
-FROM information_schema.statistics 
-WHERE table_schema = DATABASE()
-  AND table_name = 'leitoresRFID'
-  AND index_name = 'idx_ping_optimized';
-
--- Remover índice antigo se existir
-DROP INDEX IF EXISTS idx_ping_optimized ON leitoresRFID;
-
--- Criar novo índice otimizado para evitar filesort no ORDER BY DESC
--- IMPORTANTE: A ordem das colunas é crucial para performance
--- 1. EtiquetaRFID_hex - filtro principal (prefix de 25 chars cobre PING_PERIODICO_*)
--- 2. Horario DESC - ordenação descendente (evita filesort)
--- 3. Foto - permite filtrar IS NOT NULL sem scan de BLOB
--- 4. CodigoLeitor, Antena - filtros adicionais cobertos
-CREATE INDEX idx_ping_optimized_v2
-ON leitoresRFID (
-    EtiquetaRFID_hex(25),
-    Horario DESC,
-    Foto(1),
-    CodigoLeitor,
-    Antena
-);
+-- A versão 4.0 funciona com os índices existentes.
+-- Não é necessário criar novos índices nem executar este script.
+-- O código da aplicação foi modificado para usar busca incremental automaticamente.
 
 -- ============================================================================
 -- ÍNDICE ADICIONAL PARA ESTATÍSTICAS

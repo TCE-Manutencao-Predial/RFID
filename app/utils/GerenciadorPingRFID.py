@@ -124,6 +124,194 @@ class GerenciadorPingRFID:
             self.logger.error(f"Erro ao conectar ao MySQL: {e}")
             raise
     
+    def _obter_pings_incremental(self, filtros, limite, offset):
+        """
+        Busca PINGs incrementalmente por períodos de data (chunks de 7 dias).
+        Evita ORDER BY em toda a tabela, processando dados recentes primeiro.
+        
+        Args:
+            filtros (dict): Filtros do usuário (exceto data)
+            limite (int): Número de registros desejados
+            offset (int): Offset para paginação
+            
+        Returns:
+            dict: Resultado com pings encontrados
+        """
+        pings_coletados = []
+        total_encontrado = 0
+        chunk_dias = 7  # Buscar em chunks de 7 dias
+        max_dias_busca = 90  # Buscar no máximo 90 dias para trás
+        
+        data_fim = datetime.now()
+        data_inicio = data_fim - timedelta(days=chunk_dias)
+        dias_buscados = 0
+        
+        connection = None
+        cursor = None
+        
+        try:
+            connection = self._get_connection()
+            cursor = connection.cursor(dictionary=True)
+            
+            self.logger.info(f"Busca incremental: limite={limite}, offset={offset}")
+            
+            # Preparar filtros adicionais (exceto data)
+            where_extras = []
+            params_extras = []
+            
+            if filtros:
+                if filtros.get('etiqueta'):
+                    where_extras.append("l.EtiquetaRFID_hex LIKE %s")
+                    params_extras.append(f"%{filtros['etiqueta']}%")
+                
+                if filtros.get('antena'):
+                    if '[' in str(filtros['antena']) and ']' in str(filtros['antena']):
+                        import re
+                        match = re.match(r'\[([^\]]+)\]\s*A?(\d+)', str(filtros['antena']))
+                        if match:
+                            codigo_leitor = match.group(1)
+                            antena_num = match.group(2)
+                            where_extras.append("l.CodigoLeitor = %s AND l.Antena = %s")
+                            params_extras.append(codigo_leitor)
+                            params_extras.append(antena_num)
+                        else:
+                            where_extras.append("l.Antena = %s")
+                            params_extras.append(filtros['antena'])
+                    else:
+                        where_extras.append("l.Antena = %s")
+                        params_extras.append(filtros['antena'])
+                
+                if filtros.get('codigo_leitor'):
+                    where_extras.append("l.CodigoLeitor = %s")
+                    params_extras.append(filtros['codigo_leitor'])
+            
+            where_extras_str = " AND " + " AND ".join(where_extras) if where_extras else ""
+            
+            # Buscar em chunks até coletar registros suficientes (limite + offset)
+            registros_necessarios = limite + offset
+            
+            while len(pings_coletados) < registros_necessarios and dias_buscados < max_dias_busca:
+                # Query para o chunk atual (7 dias)
+                query = f"""
+                    SELECT 
+                        l.CodigoLeitor,
+                        l.Horario,
+                        l.Antena,
+                        l.EtiquetaRFID_hex,
+                        l.RSSI
+                    FROM leitoresRFID l
+                    WHERE l.EtiquetaRFID_hex LIKE 'PING_PERIODICO_%'
+                      AND l.Foto IS NOT NULL
+                      AND l.Horario >= %s
+                      AND l.Horario < %s
+                      {where_extras_str}
+                    ORDER BY l.Horario DESC
+                    LIMIT %s
+                """
+                
+                params = [
+                    data_inicio.strftime('%Y-%m-%d %H:%M:%S'),
+                    data_fim.strftime('%Y-%m-%d %H:%M:%S'),
+                    *params_extras,
+                    registros_necessarios - len(pings_coletados) + 100  # Buscar um pouco a mais
+                ]
+                
+                self.logger.debug(f"Chunk {dias_buscados}-{dias_buscados+chunk_dias} dias: {data_inicio.strftime('%Y-%m-%d')} a {data_fim.strftime('%Y-%m-%d')}")
+                
+                cursor.execute(query, params)
+                resultados_chunk = cursor.fetchall()
+                
+                if resultados_chunk:
+                    pings_coletados.extend(resultados_chunk)
+                    self.logger.debug(f"  → Encontrados {len(resultados_chunk)} registros neste chunk")
+                else:
+                    self.logger.debug(f"  → Nenhum registro neste chunk")
+                
+                # Avançar para o próximo chunk
+                data_fim = data_inicio
+                data_inicio = data_fim - timedelta(days=chunk_dias)
+                dias_buscados += chunk_dias
+                
+                # Se já coletamos o suficiente, parar
+                if len(pings_coletados) >= registros_necessarios:
+                    break
+            
+            # Ordenar todos os coletados por data DESC (já devem estar, mas garantir)
+            pings_coletados.sort(key=lambda x: x['Horario'], reverse=True)
+            
+            # Aplicar offset e limite
+            pings_pagina = pings_coletados[offset:offset + limite]
+            
+            # Estimar total (seria necessário COUNT completo, mas vamos usar aproximação)
+            # Para primeira página, fazer COUNT real só no período já buscado
+            if offset == 0:
+                count_query = f"""
+                    SELECT COUNT(*) as total
+                    FROM leitoresRFID l
+                    WHERE l.EtiquetaRFID_hex LIKE 'PING_PERIODICO_%'
+                      AND l.Foto IS NOT NULL
+                      AND l.Horario >= %s
+                      {where_extras_str}
+                """
+                count_params = [
+                    (datetime.now() - timedelta(days=dias_buscados)).strftime('%Y-%m-%d %H:%M:%S'),
+                    *params_extras
+                ]
+                cursor.execute(count_query, count_params)
+                total_encontrado = cursor.fetchone()['total']
+            else:
+                # Para páginas subsequentes, usar total coletado como estimativa
+                total_encontrado = len(pings_coletados)
+            
+            # Processar registros para o formato de saída
+            pings_processados = []
+            for ping in pings_pagina:
+                ping_proc = {
+                    'codigo_leitor': ping['CodigoLeitor'],
+                    'horario': ping['Horario'],
+                    'antena': ping['Antena'],
+                    'antena_completa': f"[{ping['CodigoLeitor']}] A{ping['Antena']}",
+                    'etiqueta_hex': ping['EtiquetaRFID_hex'],
+                    'rssi': ping['RSSI'],
+                    'tem_foto': True
+                }
+                
+                if isinstance(ping['Horario'], datetime):
+                    ping_proc['horario_formatado'] = ping['Horario'].strftime('%d/%m/%Y %H:%M:%S')
+                else:
+                    ping_proc['horario_formatado'] = str(ping['Horario'])
+                
+                pings_processados.append(ping_proc)
+            
+            self.logger.info(f"Busca incremental concluída: {len(pings_processados)} registros retornados de {dias_buscados} dias buscados")
+            
+            return {
+                'success': True,
+                'pings': pings_processados,
+                'total': total_encontrado,
+                'limite': limite,
+                'offset': offset,
+                'from_cache': False,
+                'filtro_automatico_30_dias': False,  # Busca incremental, não filtro fixo
+                'dias_buscados': dias_buscados,
+                'metodo': 'incremental'
+            }
+            
+        except Exception as e:
+            self.logger.error(f"Erro na busca incremental: {e}")
+            return {
+                'success': False,
+                'error': str(e),
+                'pings': [],
+                'total': 0,
+                'from_cache': False
+            }
+        finally:
+            if cursor:
+                cursor.close()
+            if connection:
+                connection.close()
+    
     def obter_pings(self, filtros=None, limite=100, offset=0, force_refresh=False):
         """
         Obtém lista de registros PING com filtros opcionais.
@@ -172,6 +360,18 @@ class GerenciadorPingRFID:
             
             # Filtrar apenas PINGs que têm foto (não usa LENGTH para evitar scan do BLOB)
             where_conditions.append("l.Foto IS NOT NULL")
+            
+            # OTIMIZAÇÃO: Busca incremental por data
+            # Em vez de ORDER BY em toda a tabela, buscamos em chunks de 7 dias mais recentes
+            has_date_filter = filtros and (filtros.get('horario_inicio') or filtros.get('horario_fim'))
+            
+            # Se não houver filtro de data, usar busca incremental
+            usar_busca_incremental = not has_date_filter
+            
+            if usar_busca_incremental:
+                # Buscar incrementalmente dos dados mais recentes
+                self.logger.info("Usando busca incremental por data (chunks de 7 dias)")
+                return self._obter_pings_incremental(filtros, limite, offset)
 
             # Filtros adicionais do usuário
             if filtros:
@@ -317,7 +517,8 @@ class GerenciadorPingRFID:
                 'total': total,
                 'limite': limite,
                 'offset': offset,
-                'from_cache': False
+                'from_cache': False,
+                'filtro_automatico_30_dias': not has_date_filter  # Informar se filtro automático está ativo
             }
             
             # Armazenar no cache
