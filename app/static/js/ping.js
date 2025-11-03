@@ -22,16 +22,16 @@ function formatarEtiquetaRFID(codigoRFID) {
   
   // Padrões conhecidos (ordenados do mais específico ao mais genérico)
   const padroes = [
-    // Padrão: AAA0AAAA seguido de zeros e sufixo
-    { regex: /^[A-F0-9]{8}0+([A-F0-9]{4,})$/, grupo: 1 },
-    // Padrão: 32366259FC0000400000 seguido de sufixo
-    { regex: /^32366259FC0{4}40{4}([A-F0-9]{4,})$/i, grupo: 1 },
-    // Padrão: 6170617200000000 seguido de sufixo
-    { regex: /^61706172(0{8,})([A-F0-9]{4,})$/i, grupo: 2 },
-    // Padrão: zeros seguidos de sufixo (pelo menos 4 dígitos)
-    { regex: /^0+([A-F0-9]{4,})$/, grupo: 1 },
     // Padrão: PING_PERIODICO_ - manter como está
     { regex: /^PING_PERIODICO_/i, grupo: 0 },
+    // Padrão: 32366259FC0000400000 seguido de sufixo (mais específico)
+    { regex: /^32366259FC0{4}40{4}([A-F0-9]{4,})$/i, grupo: 1 },
+    // Padrão: 61706172 (hex para "apar") seguido de zeros e sufixo
+    { regex: /^61706172(0+)([A-F0-9]{4,})$/i, grupo: 2 },
+    // Padrão: AAA0AAAA seguido de zeros e sufixo
+    { regex: /^AAA0AAAA(0+)([A-F0-9]{4,})$/i, grupo: 2 },
+    // Padrão: apenas zeros seguidos de sufixo (pelo menos 4 dígitos)
+    { regex: /^0+([A-F0-9]{4,})$/, grupo: 1 },
   ];
   
   // Tentar cada padrão

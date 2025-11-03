@@ -198,8 +198,12 @@ class GerenciadorInventariosRFID:
                 )
                 cursor.execute(insert_query, valores)
             
+            connection.commit()  # COMMIT após inserir todas as etiquetas
+            
             # Processar leituras dos últimos 6 meses
-            localizados = self._processar_leituras_historicas(id_inventario)
+            localizados = self._processar_leituras_historicas(id_inventario, connection, cursor)
+            
+            connection.commit()  # COMMIT após processar leituras históricas
             
             # Limpar cache
             self.limpar_cache()
@@ -224,23 +228,31 @@ class GerenciadorInventariosRFID:
             if connection:
                 connection.close()
     
-    def _processar_leituras_historicas(self, id_inventario):
+    def _processar_leituras_historicas(self, id_inventario, connection=None, cursor=None):
         """
         Processa leituras históricas dos últimos 6 meses para marcar itens como localizados.
         
         Args:
             id_inventario (int): ID do inventário
+            connection: Conexão MySQL (opcional, reutiliza se fornecida)
+            cursor: Cursor MySQL (opcional, reutiliza se fornecido)
             
         Returns:
             int: Número de etiquetas localizadas
         """
-        connection = None
-        cursor = None
+        fechar_conexao = False
+        fechar_cursor = False
         localizados = 0
         
         try:
-            connection = self._get_connection()
-            cursor = connection.cursor()
+            # Se não recebeu conexão, criar nova
+            if not connection:
+                connection = self._get_connection()
+                fechar_conexao = True
+            
+            if not cursor:
+                cursor = connection.cursor()
+                fechar_cursor = True
             
             # Data de 6 meses atrás
             data_inicio = datetime.now() - timedelta(days=180)
@@ -268,17 +280,23 @@ class GerenciadorInventariosRFID:
             cursor.execute(query_update, (data_inicio, id_inventario))
             localizados = cursor.rowcount
             
+            # Se criou a conexão aqui, faz commit
+            if fechar_conexao:
+                connection.commit()
+            
             self.logger.info(f"Processadas {localizados} leituras históricas para inventário {id_inventario}")
             
             return localizados
             
         except Error as e:
             self.logger.error(f"Erro ao processar leituras históricas: {e}")
+            if fechar_conexao and connection:
+                connection.rollback()
             return 0
         finally:
-            if cursor:
+            if fechar_cursor and cursor:
                 cursor.close()
-            if connection:
+            if fechar_conexao and connection:
                 connection.close()
     
     def processar_csv_leituras(self, id_inventario, arquivo_csv):
@@ -383,6 +401,8 @@ class GerenciadorInventariosRFID:
                     elif result[0] == 'Localizado':
                         # Etiqueta já foi localizada anteriormente
                         pass
+            
+            connection.commit()  # COMMIT após processar todas as etiquetas do CSV
             
             # Limpar cache
             self.limpar_cache()
@@ -676,6 +696,7 @@ class GerenciadorInventariosRFID:
             """
             
             cursor.execute(update_query, (id_inventario,))
+            connection.commit()  # COMMIT necessário para persistir a mudança
             
             # Limpar cache
             self.limpar_cache()
