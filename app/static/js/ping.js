@@ -318,7 +318,13 @@ function renderizarTabela(pings) {
       <td data-horario="${ping.horario}">${ping.horario_formatado || ping.horario}</td>
       <td>${ping.codigo_leitor}</td>
       <td><span class="antena-badge">${ping.antena}</span></td>
-      <td><span class="ping-badge">${ping.etiqueta_hex}</span></td>
+      <td>
+        <span class="ping-badge" 
+              data-codigo-completo="${ping.etiqueta_hex}"
+              title="Código completo: ${ping.etiqueta_hex}">
+          ${formatarEtiquetaRFID(ping.etiqueta_hex)}
+        </span>
+      </td>
       <td>${rssiIndicator}</td>
       <td>
         <div class="rfid-actions">
@@ -435,8 +441,10 @@ function formatarNumero(num) {
 }
 
 function verDetalhesPing(codigo) {
-  // Preencher informações básicas
-  document.getElementById("detalhesCodigo").textContent = codigo;
+  // Preencher informações básicas com formatação
+  const elementoCodigo = document.getElementById("detalhesCodigo");
+  elementoCodigo.textContent = formatarEtiquetaRFID(codigo);
+  elementoCodigo.title = `Código completo: ${codigo}`;
   
   // Carregar histórico
   carregarHistoricoPing(codigo);
@@ -505,8 +513,10 @@ async function carregarHistoricoPing(codigo) {
 
 async function verFotoPing(codigo, codigoLeitor, antena, horario) {
   try {
-    // Preencher informações no modal
-    document.getElementById("fotoEtiquetaCodigo").textContent = codigo;
+    // Preencher informações no modal com formatação
+    const elementoFotoCodigo = document.getElementById("fotoEtiquetaCodigo");
+    elementoFotoCodigo.textContent = formatarEtiquetaRFID(codigo);
+    elementoFotoCodigo.title = `Código completo: ${codigo}`;
     document.getElementById("fotoEtiquetaInfo").textContent = "Verificando disponibilidade...";
     
     // Mostrar loading e limpar controles
@@ -712,7 +722,9 @@ async function navegarFoto(codigoAtual, codigoLeitorAtual, antenaAtual, horarioA
     const proximoHorario = proximaRow.cells[0]?.getAttribute('data-horario') || proximaRow.cells[0]?.textContent.trim();
     const proximoLeitor = proximaRow.cells[1]?.textContent.trim();
     const proximaAntena = proximaRow.cells[2]?.querySelector('.antena-badge')?.textContent.trim();
-    const proximoCodigo = proximaRow.cells[3]?.querySelector('.ping-badge')?.textContent.trim();
+    // Obter código completo do atributo data, não do texto formatado
+    const proximoCodigo = proximaRow.cells[3]?.querySelector('.ping-badge')?.getAttribute('data-codigo-completo') || 
+                          proximaRow.cells[3]?.querySelector('.ping-badge')?.textContent.trim();
     
     // Carregar foto do próximo PING
     await verFotoPing(proximoCodigo, proximoLeitor, proximaAntena, proximoHorario);
