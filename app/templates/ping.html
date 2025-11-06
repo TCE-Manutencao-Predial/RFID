@@ -68,11 +68,6 @@
           <p class="rfid-stat-label">PINGs com Foto</p>
         </div>
         <div class="rfid-stat-card">
-          <i class="fas fa-satellite rfid-stat-icon" style="color: var(--rfid-info)"></i>
-          <h2 class="rfid-stat-value" id="antenasAtivas">0</h2>
-          <p class="rfid-stat-label">Antenas Ativas</p>
-        </div>
-        <div class="rfid-stat-card">
           <i class="fas fa-clock rfid-stat-icon" style="color: var(--rfid-warning)"></i>
           <h2 class="rfid-stat-value" id="ultimoPing">--</h2>
           <p class="rfid-stat-label">Último PING</p>
@@ -91,8 +86,13 @@
 
         <div class="rfid-filters">
           <div class="rfid-filter-group">
-            <label class="rfid-filter-label"> <i class="fas fa-barcode"></i> Código da Etiqueta </label>
-            <input type="text" id="filtroEtiqueta" class="rfid-filter-input" placeholder="Digite o código PING..." autocomplete="off" />
+            <label class="rfid-filter-label"> <i class="fas fa-map-marker-alt"></i> Local </label>
+            <select id="filtroLocal" class="rfid-filter-select">
+              <option value="">Todos os Locais</option>
+              <option value="B1">B1</option>
+              <option value="B2">B2</option>
+              <option value="S1">S1</option>
+            </select>
           </div>
 
           <div class="rfid-filter-group">
@@ -111,18 +111,6 @@
           <div class="rfid-filter-group">
             <label class="rfid-filter-label"> <i class="fas fa-calendar-check"></i> Data Final </label>
             <input type="datetime-local" id="filtroDataFim" class="rfid-filter-input" />
-          </div>
-
-          <div class="rfid-filter-group">
-            <label class="rfid-filter-label"> <i class="fas fa-clock"></i> PINGs Recentes </label>
-            <select id="filtroRecentes" class="rfid-filter-select">
-              <option value="">Todos</option>
-              <option value="5">Últimos 5 minutos</option>
-              <option value="15">Últimos 15 minutos</option>
-              <option value="30">Últimos 30 minutos</option>
-              <option value="60">Última hora</option>
-              <option value="1440">Últimas 24 horas</option>
-            </select>
           </div>
         </div>
       </div>
@@ -154,10 +142,8 @@
           <thead>
             <tr>
               <th>Data/Hora</th>
-              <th>Código Leitor</th>
+              <th>Local</th>
               <th>Antena</th>
-              <th>Código PING</th>
-              <th>RSSI</th>
               <th>Ações</th>
             </tr>
           </thead>
@@ -167,40 +153,6 @@
         </table>
       </div>
     </main>
-
-    <!-- Modal de Detalhes do PING -->
-    <div class="modal-overlay" id="modalDetalhes">
-      <div class="modal">
-        <div class="modal-header">
-          <h3 class="modal-title">
-            <i class="fas fa-history"></i>
-            Histórico do PING
-          </h3>
-          <button class="modal-close" onclick="fecharModal('modalDetalhes')">
-            <i class="fas fa-times"></i>
-          </button>
-        </div>
-        <div class="modal-body">
-          <div class="detalhes-info">
-            <h4>Código PING: <span id="detalhesCodigo" class="rfid-etiqueta"></span></h4>
-          </div>
-
-          <div class="historico-container">
-            <h4><i class="fas fa-clock"></i> Histórico de Registros</h4>
-            <div id="historicoLoading" class="rfid-loading" style="display: none">
-              <i class="fas fa-spinner"></i>
-              <p>Carregando histórico...</p>
-            </div>
-            <div id="historicoContent">
-              <!-- Histórico será carregado aqui -->
-            </div>
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="rfid-btn btn-cancel" onclick="fecharModal('modalDetalhes')">Fechar</button>
-        </div>
-      </div>
-    </div>
 
     <!-- Modal de Foto do PING -->
     <div class="modal-overlay" id="modalFoto">
@@ -218,7 +170,7 @@
           <div class="foto-header-compact">
             <div class="foto-info-compact">
               <div class="foto-info-line">
-                <strong>Código PING:</strong> <span id="fotoEtiquetaCodigo" class="rfid-etiqueta"></span>
+                <strong>Local/Antena:</strong> <span id="fotoEtiquetaCodigo" class="rfid-etiqueta"></span>
               </div>
               <div class="foto-info-line" id="fotoEtiquetaInfo">
                 Carregando informações...

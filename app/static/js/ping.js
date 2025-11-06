@@ -269,9 +269,6 @@ async function carregarEstatisticas(forceRefresh = false) {
       document.getElementById("pingsComFoto").textContent = 
         formatarNumero(stats.pings_com_foto || 0);
       
-      document.getElementById("antenasAtivas").textContent = 
-        stats.total_antenas || 0;
-      
       document.getElementById("ultimoPing").textContent = 
         stats.ultimo_ping_formatado || '--';
     }
