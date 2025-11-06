@@ -1,56 +1,23 @@
 // ping.js - JavaScript para página de PING
-// Última atualização: 2025-10-31 - Estrutura de tabela com 6 colunas (removida coluna Foto)
+// Refatorado para usar tabela pingsRFID
 
 // Variáveis globais
 let paginaAtual = 1;
 const registrosPorPagina = 50;
 let totalRegistros = 0;
 let autoRefreshInterval = null;
-let antenasDisponiveis = [];
+let locaisDisponiveis = [];
 let lastScrollY = 0;
 
 /**
- * Formata código de etiqueta RFID removendo prefixos conhecidos
- * Mantém o código original intacto em data-attributes para edição
- * @param {string} codigoRFID - Código completo da etiqueta
- * @returns {string} - Código formatado para visualização
+ * Formata local e antena para exibição
+ * @param {string} local - Local (B1, B2, S1)
+ * @param {string} antena - Número da antena
+ * @returns {string} - Formato local_antena
  */
-function formatarEtiquetaRFID(codigoRFID) {
-  if (!codigoRFID) return "-";
-  
-  const codigo = codigoRFID.toUpperCase();
-  
-  // Padrões conhecidos (ordenados do mais específico ao mais genérico)
-  const padroes = [
-    // Padrão: PING_PERIODICO_ - manter como está
-    { regex: /^PING_PERIODICO_/i, grupo: 0 },
-    // Padrão: 32366259FC0000400000 seguido de sufixo (mais específico)
-    { regex: /^32366259FC0{4}40{4}([A-F0-9]{4,})$/i, grupo: 1 },
-    // Padrão: 61706172 (hex para "apar") seguido de zeros e sufixo
-    { regex: /^61706172(0+)([A-F0-9]{4,})$/i, grupo: 2 },
-    // Padrão: AAA0AAAA seguido de zeros e sufixo
-    { regex: /^AAA0AAAA(0+)([A-F0-9]{4,})$/i, grupo: 2 },
-    // Padrão: apenas zeros seguidos de sufixo (pelo menos 4 dígitos)
-    { regex: /^0+([A-F0-9]{4,})$/, grupo: 1 },
-  ];
-  
-  // Tentar cada padrão
-  for (const padrao of padroes) {
-    if (padrao.grupo === 0) {
-      // Retornar código completo para PINGs
-      if (codigo.match(padrao.regex)) {
-        return codigoRFID;
-      }
-    } else {
-      const match = codigo.match(padrao.regex);
-      if (match && match[padrao.grupo]) {
-        return match[padrao.grupo];
-      }
-    }
-  }
-  
-  // Se não corresponder a nenhum padrão, retornar o código completo
-  return codigoRFID;
+function formatarLocalAntena(local, antena) {
+  if (!local || !antena) return "-";
+  return `${local} - A${antena}`;
 }
 
 // Sistema de Toast
@@ -100,50 +67,22 @@ function showToast(message, type = "info", title = "") {
 // Inicialização
 document.addEventListener("DOMContentLoaded", function () {
   inicializarEventos();
-  carregarAntenas();
+  carregarLocais();
   carregarDados();
-  // Carregar estatísticas APÓS os dados principais para não bloquear
   setTimeout(() => carregarEstatisticas(), 100);
 });
 
 function inicializarEventos() {
   // Eventos de filtro
-  document.getElementById("filtroEtiqueta")
-    .addEventListener("input", debounce(aplicarFiltros, 500));
-  document.getElementById("filtroAntena")
-    .addEventListener("change", aplicarFiltros);
-  document.getElementById("filtroDataInicio").addEventListener("change", aplicarFiltros);
-  document.getElementById("filtroDataFim").addEventListener("change", aplicarFiltros);
-  document.getElementById("filtroRecentes").addEventListener("change", aplicarFiltroRecentes);
-}
-
-function debounce(func, wait) {
-  let timeout;
-  return function executedFunction(...args) {
-    const later = () => {
-      clearTimeout(timeout);
-      func(...args);
-    };
-    clearTimeout(timeout);
-    timeout = setTimeout(later, wait);
-  };
+  document.getElementById("filtroLocal")?.addEventListener("change", aplicarFiltros);
+  document.getElementById("filtroAntena")?.addEventListener("change", aplicarFiltros);
+  document.getElementById("filtroDataInicio")?.addEventListener("change", aplicarFiltros);
+  document.getElementById("filtroDataFim")?.addEventListener("change", aplicarFiltros);
 }
 
 function aplicarFiltros() {
   paginaAtual = 1;
   carregarDados();
-}
-
-function aplicarFiltroRecentes() {
-  const minutos = document.getElementById("filtroRecentes").value;
-  
-  if (minutos) {
-    // Limpar filtros de data ao usar recentes
-    document.getElementById("filtroDataInicio").value = "";
-    document.getElementById("filtroDataFim").value = "";
-  }
-  
-  aplicarFiltros();
 }
 
 function atualizarDados() {
@@ -158,7 +97,6 @@ async function carregarDados(forceRefresh = false, showToastMessage = false) {
     const offset = (paginaAtual - 1) * registrosPorPagina;
     const filtros = obterFiltros();
 
-    // Construir query string
     const params = new URLSearchParams({
       limite: registrosPorPagina,
       offset: offset,
@@ -169,16 +107,7 @@ async function carregarDados(forceRefresh = false, showToastMessage = false) {
       params.append("force_refresh", "true");
     }
 
-    // Verificar se é filtro de recentes
-    const minutosRecentes = document.getElementById("filtroRecentes").value;
-    let url;
-    
-    if (minutosRecentes) {
-      url = `/RFID/api/ping/ultimos/${minutosRecentes}?${params}`;
-    } else {
-      url = `/RFID/api/ping?${params}`;
-    }
-
+    const url = `/RFID/api/ping?${params}`;
     const response = await fetch(url);
 
     if (!response.ok) {
@@ -193,47 +122,16 @@ async function carregarDados(forceRefresh = false, showToastMessage = false) {
       atualizarPaginacao();
       window.scrollTo(0, lastScrollY);
 
-      // Exibir informação sobre busca incremental
-      if (data.metodo === 'incremental') {
-        const avisoFiltro = document.getElementById('avisoFiltro30Dias');
-        if (avisoFiltro) {
-          avisoFiltro.style.display = 'block';
-          avisoFiltro.innerHTML = `<strong>ℹ️ Busca otimizada:</strong> Exibindo registros dos últimos ${data.dias_buscados || 7} dias (busca incremental). Use os filtros de data para pesquisar períodos específicos.`;
-        } else {
-          // Criar aviso se não existir
-          const aviso = document.createElement('div');
-          aviso.id = 'avisoFiltro30Dias';
-          aviso.className = 'alert alert-info';
-          aviso.style.cssText = 'margin: 10px 0; padding: 10px; background-color: #d1ecf1; border: 1px solid #bee5eb; border-radius: 4px; color: #0c5460;';
-          aviso.innerHTML = `<strong>ℹ️ Busca otimizada:</strong> Exibindo registros dos últimos ${data.dias_buscados || 7} dias (busca incremental). Use os filtros de data para pesquisar períodos específicos.`;
-          const tabela = document.querySelector('.tabela-wrapper');
-          if (tabela) {
-            tabela.parentNode.insertBefore(aviso, tabela);
-          }
-        }
-      } else {
-        // Esconder aviso se filtro de data foi aplicado manualmente
-        const avisoFiltro = document.getElementById('avisoFiltro30Dias');
-        if (avisoFiltro) {
-          avisoFiltro.style.display = 'none';
-        }
-      }
-
       if (showToastMessage && data.pings.length > 0) {
         const cacheInfo = data.from_cache ? " (do cache)" : " (atualizado)";
-        const metodoInfo = data.metodo === 'incremental' ? ` em ${data.dias_buscados} dias` : '';
-        showToast(`${data.pings.length} registros de PING carregados${cacheInfo}${metodoInfo}`, "success");
+        showToast(`${data.pings.length} registros de PING carregados${cacheInfo}`, "success");
       }
     } else {
       throw new Error(data.error || "Erro ao carregar dados");
     }
   } catch (error) {
     console.error("Erro:", error);
-    // Verificar se é erro 500 (timeout) e não exibir botão de retry
-    const isTimeout = error.message.includes('timeout') || 
-                     error.message.includes('execution time exceeded') ||
-                     error.message.includes('500');
-    mostrarErro(error.message, isTimeout);
+    mostrarErro(error.message);
     showToast(error.message, "error");
   }
 }
@@ -241,24 +139,18 @@ async function carregarDados(forceRefresh = false, showToastMessage = false) {
 function obterFiltros() {
   const filtros = {};
 
-  const etiqueta = document.getElementById("filtroEtiqueta").value.trim();
-  if (etiqueta) filtros.etiqueta = etiqueta;
+  const local = document.getElementById("filtroLocal")?.value;
+  if (local) filtros.local = local;
 
-  const antena = document.getElementById("filtroAntena").value;
-  if (antena) {
-    if (antena.startsWith('leitor:')) {
-      filtros.codigo_leitor = antena.substring(7);
-    } else {
-      filtros.antena = antena;
-    }
-  }
+  const antena = document.getElementById("filtroAntena")?.value;
+  if (antena) filtros.antena = antena;
 
-  const dataInicio = document.getElementById("filtroDataInicio").value;
+  const dataInicio = document.getElementById("filtroDataInicio")?.value;
   if (dataInicio) {
     filtros.horario_inicio = dataInicio.replace('T', ' ') + ':00';
   }
 
-  const dataFim = document.getElementById("filtroDataFim").value;
+  const dataFim = document.getElementById("filtroDataFim")?.value;
   if (dataFim) {
     filtros.horario_fim = dataFim.replace('T', ' ') + ':00';
   }
@@ -300,41 +192,14 @@ function renderizarTabela(pings) {
       tr.classList.add("ping-recente");
     }
 
-    // Indicador RSSI
-    const rssiClass = getRSSIClass(ping.rssi);
-    const rssiIndicator = `
-      <div class="rssi-indicator ${rssiClass}">
-        <span class="rssi-value">${ping.rssi}</span>
-        <div class="rssi-bars">
-          <div class="rssi-bar"></div>
-          <div class="rssi-bar"></div>
-          <div class="rssi-bar"></div>
-          <div class="rssi-bar"></div>
-        </div>
-      </div>
-    `;
-
     tr.innerHTML = `
       <td data-horario="${ping.horario}">${ping.horario_formatado || ping.horario}</td>
-      <td>${ping.codigo_leitor}</td>
+      <td><span class="local-badge">${ping.local}</span></td>
       <td><span class="antena-badge">${ping.antena}</span></td>
       <td>
-        <span class="ping-badge" 
-              data-codigo-completo="${ping.etiqueta_hex}"
-              title="Código completo: ${ping.etiqueta_hex}">
-          ${formatarEtiquetaRFID(ping.etiqueta_hex)}
-        </span>
-      </td>
-      <td>${rssiIndicator}</td>
-      <td>
         <div class="rfid-actions">
-          <button class="rfid-action-btn rfid-action-btn-info" 
-                  onclick="verDetalhesPing('${ping.etiqueta_hex}')"
-                  title="Ver histórico">
-            <i class="fas fa-history"></i> Histórico
-          </button>
           <button class="rfid-action-btn rfid-action-btn-photo" 
-                  onclick="verFotoPing('${ping.etiqueta_hex}', '${ping.codigo_leitor}', '${ping.antena}', '${ping.horario}')"
+                  onclick="verFotoPing('${ping.local}', '${ping.antena}', '${ping.horario}')"
                   title="Ver foto">
             <i class="fas fa-camera"></i> Foto
           </button>
@@ -346,63 +211,42 @@ function renderizarTabela(pings) {
   });
 }
 
-function getRSSIClass(rssi) {
-  const valor = Math.abs(parseInt(rssi));
-  if (valor <= 50) return 'rssi-excellent';
-  if (valor <= 60) return 'rssi-good';
-  if (valor <= 70) return 'rssi-fair';
-  return 'rssi-poor';
-}
-
-async function carregarAntenas() {
+async function carregarLocais() {
   try {
-    const response = await fetch('/RFID/api/ping/antenas');
+    const response = await fetch('/RFID/api/ping/locais');
     const data = await response.json();
 
     if (data.success) {
-      antenasDisponiveis = data.antenas;
-      const select = document.getElementById("filtroAntena");
-      select.innerHTML = '<option value="">Todas as Antenas</option>';
-
-      // Agrupar antenas por código do leitor
-      const antenasAgrupadas = {};
-      data.antenas.forEach(antena => {
-        if (!antenasAgrupadas[antena.codigo_leitor]) {
-          antenasAgrupadas[antena.codigo_leitor] = [];
-        }
-        antenasAgrupadas[antena.codigo_leitor].push(antena);
-      });
-
-      Object.keys(antenasAgrupadas).sort().forEach(codigoLeitor => {
-        const optgroup = document.createElement('optgroup');
-        optgroup.label = `Leitor ${codigoLeitor}`;
-        antenasAgrupadas[codigoLeitor].forEach(antena => {
-          const option = document.createElement('option');
-          option.value = antena.antena;
-          option.textContent = `[${codigoLeitor}] A${antena.antena}`;
-          optgroup.appendChild(option);
-        });
-        select.appendChild(optgroup);
-      });
+      locaisDisponiveis = data.locais;
       
-      // Adicionar opção de filtrar por leitor completo
-      const leitoresUnicos = Object.keys(antenasAgrupadas);
-      if (leitoresUnicos.length > 1) {
-        const separador = document.createElement('option');
-        separador.disabled = true;
-        separador.textContent = '─────────────';
-        select.appendChild(separador);
-        
-        leitoresUnicos.forEach(codigoLeitor => {
+      // Preencher filtro de local
+      const selectLocal = document.getElementById("filtroLocal");
+      if (selectLocal) {
+        selectLocal.innerHTML = '<option value="">Todos os Locais</option>';
+        const locaisUnicos = [...new Set(data.locais.map(l => l.local))].sort();
+        locaisUnicos.forEach(local => {
           const option = document.createElement('option');
-          option.value = `leitor:${codigoLeitor}`;
-          option.textContent = `Todas do Leitor ${codigoLeitor}`;
-          select.appendChild(option);
+          option.value = local;
+          option.textContent = local;
+          selectLocal.appendChild(option);
+        });
+      }
+
+      // Preencher filtro de antena
+      const selectAntena = document.getElementById("filtroAntena");
+      if (selectAntena) {
+        selectAntena.innerHTML = '<option value="">Todas as Antenas</option>';
+        const antenasUnicas = [...new Set(data.locais.map(l => l.antena))].sort((a, b) => Number(a) - Number(b));
+        antenasUnicas.forEach(antena => {
+          const option = document.createElement('option');
+          option.value = antena;
+          option.textContent = `Antena ${antena}`;
+          selectAntena.appendChild(option);
         });
       }
     }
   } catch (error) {
-    console.error("Erro ao carregar antenas:", error);
+    console.error("Erro ao carregar locais:", error);
   }
 }
 
@@ -511,13 +355,11 @@ async function carregarHistoricoPing(codigo) {
   }
 }
 
-async function verFotoPing(codigo, codigoLeitor, antena, horario) {
+async function verFotoPing(local, antena, horario) {
   try {
-    // Preencher informações no modal com formatação
-    const elementoFotoCodigo = document.getElementById("fotoEtiquetaCodigo");
-    elementoFotoCodigo.textContent = formatarEtiquetaRFID(codigo);
-    elementoFotoCodigo.title = `Código completo: ${codigo}`;
-    document.getElementById("fotoEtiquetaInfo").textContent = "Verificando disponibilidade...";
+    // Preencher informações no modal
+    document.getElementById("fotoEtiquetaCodigo").textContent = `${local} - A${antena}`;
+    document.getElementById("fotoEtiquetaInfo").textContent = "Carregando...";
     
     // Mostrar loading e limpar controles
     const fotoContainer = document.getElementById("fotoContainer");
@@ -534,13 +376,13 @@ async function verFotoPing(codigo, codigoLeitor, antena, horario) {
 
     // Construir URL com parâmetros
     const params = new URLSearchParams({
-      codigo_leitor: codigoLeitor,
+      local: local,
       antena: antena,
       horario: horario
     });
 
     // Carregar a foto diretamente
-    const fotoUrl = `/RFID/api/ping/foto/${codigo}?${params}&t=${Date.now()}`;
+    const fotoUrl = `/RFID/api/ping/foto?${params}&t=${Date.now()}`;
     
     const fotoResponse = await fetch(fotoUrl);
     
@@ -554,7 +396,7 @@ async function verFotoPing(codigo, codigoLeitor, antena, horario) {
       if (errorData && errorData.error_type === 'no_photo') {
         // Foto vazia no banco de dados
         document.getElementById("fotoEtiquetaInfo").textContent = 
-          `Leitor: ${codigoLeitor} | Antena: ${antena} | Horário: ${new Date(horario).toLocaleString('pt-BR')}`;
+          `Local: ${local} | Antena: ${antena} | Horário: ${new Date(horario).toLocaleString('pt-BR')}`;
         
         // Esconder controles quando não há foto
         document.getElementById("fotoControlsCompact").style.display = "none";
@@ -575,18 +417,12 @@ async function verFotoPing(codigo, codigoLeitor, antena, horario) {
     
     // Atualizar informações da foto
     document.getElementById("fotoEtiquetaInfo").textContent = 
-      `Leitor: ${codigoLeitor} | Antena: ${antena} | Horário: ${new Date(horario).toLocaleString('pt-BR')}`;
+      `Local: ${local} | Antena: ${antena} | Horário: ${new Date(horario).toLocaleString('pt-BR')}`;
     
     // Mostrar controles compactos
     controlsCompact.style.display = "grid";
     controlsCompact.innerHTML = `
-      <button class="rfid-btn rfid-btn-secondary" onclick="navegarFoto('${codigo}', '${codigoLeitor}', '${antena}', '${horario}', 'anterior')">
-        <i class="fas fa-chevron-left"></i> Anterior
-      </button>
-      <button class="rfid-btn rfid-btn-secondary" onclick="navegarFoto('${codigo}', '${codigoLeitor}', '${antena}', '${horario}', 'proximo')">
-        Próximo <i class="fas fa-chevron-right"></i>
-      </button>
-      <button class="rfid-btn rfid-btn-secondary" onclick="downloadFoto('${codigo}', '${codigoLeitor}', '${antena}', '${horario}')">
+      <button class="rfid-btn rfid-btn-secondary" onclick="downloadFoto('${local}', '${antena}', '${horario}')">
         <i class="fas fa-download"></i> Baixar
       </button>
       <button class="rfid-btn rfid-btn-secondary" onclick="abrirFotoNovaAba('${fotoUrl}')">

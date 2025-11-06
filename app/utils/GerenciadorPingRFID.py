@@ -9,7 +9,7 @@ import hashlib
 import re
 
 class GerenciadorPingRFID:
-    """Gerenciador para operações com registros PING_PERIODICO da tabela leitoresRFID."""
+    """Gerenciador para operações com registros da tabela pingsRFID."""
     
     _instance = None
     
@@ -124,200 +124,12 @@ class GerenciadorPingRFID:
             self.logger.error(f"Erro ao conectar ao MySQL: {e}")
             raise
     
-    def _obter_pings_incremental(self, filtros, limite, offset):
-        """
-        Busca PINGs incrementalmente por períodos de data (chunks de 7 dias).
-        Evita ORDER BY em toda a tabela, processando dados recentes primeiro.
-        
-        Args:
-            filtros (dict): Filtros do usuário (exceto data)
-            limite (int): Número de registros desejados
-            offset (int): Offset para paginação
-            
-        Returns:
-            dict: Resultado com pings encontrados
-        """
-        pings_coletados = []
-        total_encontrado = 0
-        chunk_dias = 7  # Buscar em chunks de 7 dias
-        max_dias_busca = 90  # Buscar no máximo 90 dias para trás
-        
-        data_fim = datetime.now()
-        data_inicio = data_fim - timedelta(days=chunk_dias)
-        dias_buscados = 0
-        
-        connection = None
-        cursor = None
-        
-        try:
-            connection = self._get_connection()
-            cursor = connection.cursor(dictionary=True)
-            
-            self.logger.info(f"Busca incremental: limite={limite}, offset={offset}")
-            
-            # Preparar filtros adicionais (exceto data)
-            where_extras = []
-            params_extras = []
-            
-            if filtros:
-                if filtros.get('etiqueta'):
-                    where_extras.append("l.EtiquetaRFID_hex LIKE %s")
-                    params_extras.append(f"%{filtros['etiqueta']}%")
-                
-                if filtros.get('antena'):
-                    if '[' in str(filtros['antena']) and ']' in str(filtros['antena']):
-                        import re
-                        match = re.match(r'\[([^\]]+)\]\s*A?(\d+)', str(filtros['antena']))
-                        if match:
-                            codigo_leitor = match.group(1)
-                            antena_num = match.group(2)
-                            where_extras.append("l.CodigoLeitor = %s AND l.Antena = %s")
-                            params_extras.append(codigo_leitor)
-                            params_extras.append(antena_num)
-                        else:
-                            where_extras.append("l.Antena = %s")
-                            params_extras.append(filtros['antena'])
-                    else:
-                        where_extras.append("l.Antena = %s")
-                        params_extras.append(filtros['antena'])
-                
-                if filtros.get('codigo_leitor'):
-                    where_extras.append("l.CodigoLeitor = %s")
-                    params_extras.append(filtros['codigo_leitor'])
-            
-            where_extras_str = " AND " + " AND ".join(where_extras) if where_extras else ""
-            
-            # Buscar em chunks até coletar registros suficientes (limite + offset)
-            registros_necessarios = limite + offset
-            
-            while len(pings_coletados) < registros_necessarios and dias_buscados < max_dias_busca:
-                # Query para o chunk atual (7 dias)
-                query = f"""
-                    SELECT 
-                        l.CodigoLeitor,
-                        l.Horario,
-                        l.Antena,
-                        l.EtiquetaRFID_hex,
-                        l.RSSI
-                    FROM leitoresRFID l
-                    WHERE l.EtiquetaRFID_hex LIKE 'PING_PERIODICO_%'
-                      AND l.Foto IS NOT NULL
-                      AND l.Horario >= %s
-                      AND l.Horario < %s
-                      {where_extras_str}
-                    ORDER BY l.Horario DESC
-                    LIMIT %s
-                """
-                
-                params = [
-                    data_inicio.strftime('%Y-%m-%d %H:%M:%S'),
-                    data_fim.strftime('%Y-%m-%d %H:%M:%S'),
-                    *params_extras,
-                    registros_necessarios - len(pings_coletados) + 100  # Buscar um pouco a mais
-                ]
-                
-                self.logger.debug(f"Chunk {dias_buscados}-{dias_buscados+chunk_dias} dias: {data_inicio.strftime('%Y-%m-%d')} a {data_fim.strftime('%Y-%m-%d')}")
-                
-                cursor.execute(query, params)
-                resultados_chunk = cursor.fetchall()
-                
-                if resultados_chunk:
-                    pings_coletados.extend(resultados_chunk)
-                    self.logger.debug(f"  → Encontrados {len(resultados_chunk)} registros neste chunk")
-                else:
-                    self.logger.debug(f"  → Nenhum registro neste chunk")
-                
-                # Avançar para o próximo chunk
-                data_fim = data_inicio
-                data_inicio = data_fim - timedelta(days=chunk_dias)
-                dias_buscados += chunk_dias
-                
-                # Se já coletamos o suficiente, parar
-                if len(pings_coletados) >= registros_necessarios:
-                    break
-            
-            # Ordenar todos os coletados por data DESC (já devem estar, mas garantir)
-            pings_coletados.sort(key=lambda x: x['Horario'], reverse=True)
-            
-            # Aplicar offset e limite
-            pings_pagina = pings_coletados[offset:offset + limite]
-            
-            # Estimar total (seria necessário COUNT completo, mas vamos usar aproximação)
-            # Para primeira página, fazer COUNT real só no período já buscado
-            if offset == 0:
-                count_query = f"""
-                    SELECT COUNT(*) as total
-                    FROM leitoresRFID l
-                    WHERE l.EtiquetaRFID_hex LIKE 'PING_PERIODICO_%'
-                      AND l.Foto IS NOT NULL
-                      AND l.Horario >= %s
-                      {where_extras_str}
-                """
-                count_params = [
-                    (datetime.now() - timedelta(days=dias_buscados)).strftime('%Y-%m-%d %H:%M:%S'),
-                    *params_extras
-                ]
-                cursor.execute(count_query, count_params)
-                total_encontrado = cursor.fetchone()['total']
-            else:
-                # Para páginas subsequentes, usar total coletado como estimativa
-                total_encontrado = len(pings_coletados)
-            
-            # Processar registros para o formato de saída
-            pings_processados = []
-            for ping in pings_pagina:
-                ping_proc = {
-                    'codigo_leitor': ping['CodigoLeitor'],
-                    'horario': ping['Horario'],
-                    'antena': ping['Antena'],
-                    'antena_completa': f"[{ping['CodigoLeitor']}] A{ping['Antena']}",
-                    'etiqueta_hex': ping['EtiquetaRFID_hex'],
-                    'rssi': ping['RSSI'],
-                    'tem_foto': True
-                }
-                
-                if isinstance(ping['Horario'], datetime):
-                    ping_proc['horario_formatado'] = ping['Horario'].strftime('%d/%m/%Y %H:%M:%S')
-                else:
-                    ping_proc['horario_formatado'] = str(ping['Horario'])
-                
-                pings_processados.append(ping_proc)
-            
-            self.logger.info(f"Busca incremental concluída: {len(pings_processados)} registros retornados de {dias_buscados} dias buscados")
-            
-            return {
-                'success': True,
-                'pings': pings_processados,
-                'total': total_encontrado,
-                'limite': limite,
-                'offset': offset,
-                'from_cache': False,
-                'filtro_automatico_30_dias': False,  # Busca incremental, não filtro fixo
-                'dias_buscados': dias_buscados,
-                'metodo': 'incremental'
-            }
-            
-        except Exception as e:
-            self.logger.error(f"Erro na busca incremental: {e}")
-            return {
-                'success': False,
-                'error': str(e),
-                'pings': [],
-                'total': 0,
-                'from_cache': False
-            }
-        finally:
-            if cursor:
-                cursor.close()
-            if connection:
-                connection.close()
-    
     def obter_pings(self, filtros=None, limite=100, offset=0, force_refresh=False):
         """
         Obtém lista de registros PING com filtros opcionais.
         
         Args:
-            filtros (dict): Dicionário com filtros (etiqueta, antena, horario_inicio, horario_fim)
+            filtros (dict): Dicionário com filtros (local, antena, horario_inicio, horario_fim)
             limite (int): Número máximo de registros
             offset (int): Deslocamento para paginação
             force_refresh (bool): Força atualização ignorando o cache
@@ -325,22 +137,18 @@ class GerenciadorPingRFID:
         Returns:
             dict: Resultado com pings e total
         """
-        # Gerar chave do cache para dados
         cache_params = {
             'filtros': filtros or {},
             'limite': limite,
             'offset': offset
         }
         cache_key = self._get_cache_key('pings', cache_params)
-        
-        # Gerar chave separada para o total (sem offset/limite)
         total_cache_key = self._get_cache_key('pings_total', {'filtros': filtros or {}})
         
-        # Verificar cache primeiro
+        # Verificar cache
         if not force_refresh:
             cached_result = self._get_from_cache(cache_key)
             if cached_result:
-                # Tentar obter total do cache separado
                 cached_total = self._get_from_cache(total_cache_key)
                 if cached_total:
                     cached_result['total'] = cached_total
@@ -351,128 +159,74 @@ class GerenciadorPingRFID:
         pings = []
         
         try:
-            # Construir query base - FILTROS ESPECÍFICOS PARA PING
             where_conditions = []
             params = []
 
-            # Filtro principal: EtiquetaRFID_hex começa com 'PING_PERIODICO_'
-            where_conditions.append("l.EtiquetaRFID_hex LIKE 'PING_PERIODICO_%'")
-            
-            # Filtrar apenas PINGs que têm foto (não usa LENGTH para evitar scan do BLOB)
-            where_conditions.append("l.Foto IS NOT NULL")
-            
-            # OTIMIZAÇÃO: Busca incremental por data
-            # Em vez de ORDER BY em toda a tabela, buscamos em chunks de 7 dias mais recentes
-            has_date_filter = filtros and (filtros.get('horario_inicio') or filtros.get('horario_fim'))
-            
-            # Se não houver filtro de data, usar busca incremental
-            usar_busca_incremental = not has_date_filter
-            
-            if usar_busca_incremental:
-                # Buscar incrementalmente dos dados mais recentes
-                self.logger.info("Usando busca incremental por data (chunks de 7 dias)")
-                return self._obter_pings_incremental(filtros, limite, offset)
-
-            # Filtros adicionais do usuário
+            # Filtros
             if filtros:
-                if filtros.get('etiqueta'):
-                    where_conditions.append("l.EtiquetaRFID_hex LIKE %s")
-                    params.append(f"%{filtros['etiqueta']}%")
-
-                # Filtro especial para antena com código do leitor
-                if filtros.get('antena'):
-                    if '[' in str(filtros['antena']) and ']' in str(filtros['antena']):
-                        match = re.match(r'\[([^\]]+)\]\s*A?(\d+)', str(filtros['antena']))
-                        if match:
-                            codigo_leitor = match.group(1)
-                            antena_num = match.group(2)
-                            where_conditions.append("l.CodigoLeitor = %s AND l.Antena = %s")
-                            params.append(codigo_leitor)
-                            params.append(antena_num)
-                        else:
-                            where_conditions.append("l.Antena = %s")
-                            params.append(filtros['antena'])
-                    else:
-                        where_conditions.append("l.Antena = %s")
-                        params.append(filtros['antena'])
+                if filtros.get('local'):
+                    where_conditions.append("Local = %s")
+                    params.append(filtros['local'])
                 
-                if filtros.get('codigo_leitor'):
-                    where_conditions.append("l.CodigoLeitor = %s")
-                    params.append(filtros['codigo_leitor'])
-
+                if filtros.get('antena'):
+                    where_conditions.append("antena = %s")
+                    params.append(filtros['antena'])
+                
                 if filtros.get('horario_inicio'):
-                    where_conditions.append("l.Horario >= %s")
+                    where_conditions.append("Horario >= %s")
                     params.append(filtros['horario_inicio'])
 
                 if filtros.get('horario_fim'):
-                    where_conditions.append("l.Horario <= %s")
+                    where_conditions.append("Horario <= %s")
                     params.append(filtros['horario_fim'])
 
-            where_clause = " AND ".join(where_conditions)
+            where_clause = " AND ".join(where_conditions) if where_conditions else "1=1"
 
-            # OTIMIZAÇÃO: Remover SQL_CALC_FOUND_ROWS que causa overhead
-            # Em vez disso, buscar apenas os dados e fazer COUNT só quando necessário (offset=0)
             connection = None
             cursor = None
             try:
                 connection = self._get_connection()
                 cursor = connection.cursor(dictionary=True)
                 
-                # Query otimizada: buscar apenas os dados necessários
-                # IMPORTANTE: INDEX necessário: (EtiquetaRFID_hex, Foto, Horario DESC)
-                # Isso permite usar o índice para filtrar e ordenar sem filesort
+                # Query principal
                 data_query = f"""
                     SELECT 
-                        l.CodigoLeitor,
-                        l.Horario,
-                        l.Antena,
-                        l.EtiquetaRFID_hex,
-                        l.RSSI
-                    FROM leitoresRFID l
+                        Horario,
+                        Local,
+                        antena
+                    FROM pingsRFID
                     WHERE {where_clause}
-                    ORDER BY l.Horario DESC
+                    ORDER BY Horario DESC
                     LIMIT %s OFFSET %s
                 """
                 
                 query_params = params.copy()
                 query_params.extend([limite, offset])
                 
-                # LOG da query principal para debug
-                self.logger.debug(f"=== OBTER PINGS - Query Principal ===")
-                self.logger.debug(f"Query: {data_query}")
-                self.logger.debug(f"Params: {query_params}")
-                self.logger.debug(f"=====================================")
+                self.logger.debug(f"Query: {data_query}, Params: {query_params}")
                 
                 cursor.execute(data_query, query_params)
                 pings_raw = cursor.fetchall()
                 
-                # COUNT otimizado: só executar na primeira página OU se forçar refresh
+                # COUNT na primeira página ou se forçar refresh
                 if offset == 0 or force_refresh:
-                    # Fazer COUNT completo (agora que temos índices, é rápido!)
                     count_query = f"""
                         SELECT COUNT(*) as total 
-                        FROM leitoresRFID l
+                        FROM pingsRFID
                         WHERE {where_clause}
                     """
                     cursor.execute(count_query, params)
                     count_result = cursor.fetchone()
                     total = count_result['total'] if count_result else 0
-                    
-                    # Cachear o total separadamente (sem offset/limite)
-                    total_cache_key = self._get_cache_key('pings_total', {'filtros': filtros or {}})
                     self._set_cache(total_cache_key, total)
                 else:
-                    # Para páginas subsequentes, tentar obter do cache
-                    total_cache_key = self._get_cache_key('pings_total', {'filtros': filtros or {}})
                     cached_total = self._get_from_cache(total_cache_key)
-                    
                     if cached_total is not None:
                         total = cached_total
                     else:
-                        # Se não houver cache, fazer o COUNT
                         count_query = f"""
                             SELECT COUNT(*) as total 
-                            FROM leitoresRFID l
+                            FROM pingsRFID
                             WHERE {where_clause}
                         """
                         cursor.execute(count_query, params)
@@ -483,13 +237,11 @@ class GerenciadorPingRFID:
                 # Processar registros
                 for ping in pings_raw:
                     ping_processado = {
-                        'codigo_leitor': ping['CodigoLeitor'],
                         'horario': ping['Horario'],
-                        'antena': ping['Antena'],
-                        'antena_completa': f"[{ping['CodigoLeitor']}] A{ping['Antena']}",
-                        'etiqueta_hex': ping['EtiquetaRFID_hex'],
-                        'rssi': ping['RSSI'],
-                        'tem_foto': True  # Todos têm foto devido ao filtro WHERE
+                        'local': ping['Local'],
+                        'antena': ping['antena'],
+                        'local_antena': f"{ping['Local']} - A{ping['antena']}",
+                        'tem_foto': True  # Sempre tem foto após migração
                     }
                     
                     # Formatar horário
@@ -502,8 +254,6 @@ class GerenciadorPingRFID:
                 
             except Exception as e:
                 self.logger.error(f"Erro ao buscar registros PING: {e}")
-                self.logger.error(f"Query que causou erro: {data_query if 'data_query' in locals() else 'N/A'}")
-                self.logger.error(f"Filtros: {filtros}, limite: {limite}, offset: {offset}")
                 raise
             finally:
                 if cursor:
@@ -517,13 +267,10 @@ class GerenciadorPingRFID:
                 'total': total,
                 'limite': limite,
                 'offset': offset,
-                'from_cache': False,
-                'filtro_automatico_30_dias': not has_date_filter  # Informar se filtro automático está ativo
+                'from_cache': False
             }
             
-            # Armazenar no cache
             self._set_cache(cache_key, result)
-            
             return result
             
         except Exception as e:
@@ -563,47 +310,37 @@ class GerenciadorPingRFID:
                 connection = self._get_connection()
                 cursor = connection.cursor(dictionary=True)
                 
-                # Construir filtros base
                 where_conditions = []
                 params = []
                 
-                # Filtros principais
-                where_conditions.append("l.EtiquetaRFID_hex LIKE 'PING_PERIODICO_%'")
-                # OTIMIZAÇÃO: Removido "l.Foto IS NOT NULL" para evitar scan de BLOB
-                
-                # Aplicar filtros adicionais
                 if filtros:
                     if filtros.get('horario_inicio'):
-                        where_conditions.append("l.Horario >= %s")
+                        where_conditions.append("Horario >= %s")
                         params.append(filtros['horario_inicio'])
                     
                     if filtros.get('horario_fim'):
-                        where_conditions.append("l.Horario <= %s")
+                        where_conditions.append("Horario <= %s")
                         params.append(filtros['horario_fim'])
                 
-                where_clause = " AND ".join(where_conditions)
+                where_clause = " AND ".join(where_conditions) if where_conditions else "1=1"
                 
-                # Query para estatísticas (agora rápida com índices!)
                 stats_query = f"""
                     SELECT 
                         COUNT(*) as total_pings,
-                        COUNT(DISTINCT l.EtiquetaRFID_hex) as pings_unicos,
-                        COUNT(DISTINCT CONCAT(l.CodigoLeitor, ':', l.Antena)) as total_antenas,
-                        MIN(l.Horario) as primeiro_ping,
-                        MAX(l.Horario) as ultimo_ping,
+                        COUNT(DISTINCT CONCAT(Local, ':', antena)) as total_antenas,
+                        MIN(Horario) as primeiro_ping,
+                        MAX(Horario) as ultimo_ping,
                         COUNT(*) as pings_com_foto
-                    FROM leitoresRFID l
+                    FROM pingsRFID
                     WHERE {where_clause}
                 """
                 
                 cursor.execute(stats_query, params)
                 stats = cursor.fetchone()
                 
-                # Garantir valores padrão caso a query retorne NULL
                 if not stats:
                     stats = {
                         'total_pings': 0,
-                        'pings_unicos': 0,
                         'total_antenas': 0,
                         'primeiro_ping': None,
                         'ultimo_ping': None,
@@ -627,9 +364,7 @@ class GerenciadorPingRFID:
                     'from_cache': False
                 }
                 
-                # Armazenar no cache
                 self._set_cache(cache_key, result)
-                
                 return result
                 
             finally:
@@ -639,23 +374,20 @@ class GerenciadorPingRFID:
                     connection.close()
             
         except mysql.connector.Error as db_error:
-            # Tratamento específico para erros de timeout do MySQL
             error_msg = str(db_error)
             if 'max_execution_time' in error_msg.lower() or 'timeout' in error_msg.lower():
                 self.logger.warning(f"Timeout na query de estatísticas PING: {db_error}")
-                # Retornar estatísticas vazias em caso de timeout
                 return {
                     'success': True,
                     'estatisticas': {
                         'total_pings': 0,
-                        'pings_unicos': 0,
                         'total_antenas': 0,
                         'primeiro_ping_formatado': '--',
                         'ultimo_ping_formatado': '--',
                         'pings_com_foto': 0
                     },
                     'from_cache': False,
-                    'warning': 'Timeout ao calcular estatísticas - dados podem estar desatualizados'
+                    'warning': 'Timeout ao calcular estatísticas'
                 }
             else:
                 self.logger.error(f"Erro de banco ao obter estatísticas de PING: {db_error}")
@@ -674,71 +406,14 @@ class GerenciadorPingRFID:
                 'from_cache': False
             }
     
-    def obter_pings_por_etiqueta(self, etiqueta_hex, limite=50):
+    def obter_locais_com_antena(self, force_refresh=False):
         """
-        Obtém histórico de PINGs de uma etiqueta específica.
-        
-        Args:
-            etiqueta_hex (str): Código hexadecimal da etiqueta
-            limite (int): Número máximo de registros a retornar
-            
-        Returns:
-            dict: Histórico de PINGs da etiqueta
-        """
-        try:
-            connection = self._get_connection()
-            cursor = connection.cursor(dictionary=True)
-            
-            query = """
-                SELECT 
-                    CodigoLeitor,
-                    Horario,
-                    Antena,
-                    RSSI,
-                    1 as TemFoto
-                FROM leitoresRFID
-                WHERE EtiquetaRFID_hex = %s 
-                  AND EtiquetaRFID_hex LIKE 'PING_PERIODICO_%'
-                ORDER BY Horario DESC
-                LIMIT %s
-            """
-            
-            cursor.execute(query, (etiqueta_hex, limite))
-            pings = cursor.fetchall()
-            
-            # Formatar horários
-            for ping in pings:
-                if isinstance(ping['Horario'], datetime):
-                    ping['horario_formatado'] = ping['Horario'].strftime('%d/%m/%Y %H:%M:%S')
-            
-            return {
-                'success': True,
-                'etiqueta': etiqueta_hex,
-                'pings': pings,
-                'total': len(pings)
-            }
-            
-        except Exception as e:
-            self.logger.error(f"Erro ao obter PINGs da etiqueta {etiqueta_hex}: {e}")
-            return {
-                'success': False,
-                'error': str(e),
-                'pings': []
-            }
-        finally:
-            if cursor:
-                cursor.close()
-            if connection:
-                connection.close()
-    
-    def obter_antenas_com_leitor(self, force_refresh=False):
-        """
-        Obtém lista de antenas agrupadas por código do leitor.
+        Obtém lista de locais e antenas disponíveis.
         
         Returns:
-            dict: Lista de antenas com informações do leitor
+            dict: Lista de locais com suas antenas
         """
-        cache_key = 'antenas_com_leitor_ping'
+        cache_key = 'locais_antenas_ping'
         
         if not force_refresh:
             cached_result = self._get_from_cache(cache_key)
@@ -751,54 +426,49 @@ class GerenciadorPingRFID:
             
             query = """
                 SELECT 
-                    CodigoLeitor,
-                    Antena,
+                    Local,
+                    antena,
                     COUNT(*) as total_pings,
-                    COUNT(DISTINCT EtiquetaRFID_hex) as etiquetas_unicas,
                     MAX(Horario) as ultimo_ping
-                FROM leitoresRFID
-                WHERE EtiquetaRFID_hex LIKE 'PING_PERIODICO_%'
-                GROUP BY CodigoLeitor, Antena
-                ORDER BY CodigoLeitor, Antena
+                FROM pingsRFID
+                GROUP BY Local, antena
+                ORDER BY Local, antena
             """
             
             cursor.execute(query)
             resultados = cursor.fetchall()
             
             # Formatar resultados
-            antenas = []
+            locais = []
             for resultado in resultados:
-                antena_info = {
-                    'codigo_leitor': resultado['CodigoLeitor'],
-                    'antena': resultado['Antena'],
-                    'antena_completa': f"[{resultado['CodigoLeitor']}] A{resultado['Antena']}",
+                local_info = {
+                    'local': resultado['Local'],
+                    'antena': resultado['antena'],
+                    'local_antena': f"{resultado['Local']} - A{resultado['antena']}",
                     'total_pings': resultado['total_pings'],
-                    'etiquetas_unicas': resultado['etiquetas_unicas'],
                     'ultimo_ping': resultado['ultimo_ping']
                 }
                 
                 if resultado['ultimo_ping']:
-                    antena_info['ultimo_ping_formatado'] = resultado['ultimo_ping'].strftime('%d/%m/%Y %H:%M')
+                    local_info['ultimo_ping_formatado'] = resultado['ultimo_ping'].strftime('%d/%m/%Y %H:%M')
                 
-                antenas.append(antena_info)
+                locais.append(local_info)
             
             result = {
                 'success': True,
-                'antenas': antenas,
-                'total': len(antenas)
+                'locais': locais,
+                'total': len(locais)
             }
             
-            # Armazenar no cache
             self._set_cache(cache_key, result)
-            
             return result
             
         except Exception as e:
-            self.logger.error(f"Erro ao obter antenas PING com leitor: {e}")
+            self.logger.error(f"Erro ao obter locais PING: {e}")
             return {
                 'success': False,
                 'error': str(e),
-                'antenas': []
+                'locais': []
             }
         finally:
             if cursor:
@@ -806,15 +476,14 @@ class GerenciadorPingRFID:
             if connection:
                 connection.close()
     
-    def obter_foto_ping(self, codigo_leitor=None, antena=None, horario=None, etiqueta_hex=None):
+    def obter_foto_ping(self, local=None, antena=None, horario=None):
         """
         Obtém a foto de um PING específico.
         
         Args:
-            codigo_leitor (str): Código do leitor (preferencial)
-            antena (str): Número da antena (preferencial)
-            horario (str): Horário do PING (preferencial, pode ser formato HTTP GMT ou SQL)
-            etiqueta_hex (str): Código da etiqueta (fallback - pega mais recente)
+            local (str): Local do ping (B1, B2 ou S1)
+            antena (str): Número da antena
+            horario (str): Horário do PING
             
         Returns:
             dict: Resultado com foto (binário) ou erro
@@ -823,39 +492,22 @@ class GerenciadorPingRFID:
             connection = self._get_connection()
             cursor = connection.cursor(dictionary=True)
             
-            # Priorizar busca por CodigoLeitor + Antena + Horario (identificação única)
-            if codigo_leitor and antena and horario:
-                # Converter horário para formato SQL
+            if local and antena and horario:
                 horario_sql = self._converter_horario_para_sql(horario)
                 
-                # Primeiro verifica se o registro existe (com ou sem foto)
-                query_check = """
-                    SELECT Foto, Horario, CodigoLeitor, Antena, EtiquetaRFID_hex
-                    FROM leitoresRFID
-                    WHERE CodigoLeitor = %s
-                      AND Antena = %s
+                query = """
+                    SELECT Foto, Horario, Local, antena
+                    FROM pingsRFID
+                    WHERE Local = %s
+                      AND antena = %s
                       AND Horario = %s
-                      AND EtiquetaRFID_hex LIKE 'PING_PERIODICO_%'
                     LIMIT 1
                 """
-                cursor.execute(query_check, (codigo_leitor, antena, horario_sql))
-            
-            # Fallback: buscar por etiqueta (pega mais recente)
-            elif etiqueta_hex:
-                query_check = """
-                    SELECT Foto, Horario, CodigoLeitor, Antena, EtiquetaRFID_hex
-                    FROM leitoresRFID
-                    WHERE EtiquetaRFID_hex = %s 
-                      AND EtiquetaRFID_hex LIKE 'PING_PERIODICO_%'
-                    ORDER BY Horario DESC
-                    LIMIT 1
-                """
-                cursor.execute(query_check, (etiqueta_hex,))
-            
+                cursor.execute(query, (local, antena, horario_sql))
             else:
                 return {
                     'success': False,
-                    'error': 'Parâmetros insuficientes. Forneça (codigo_leitor, antena, horario) ou etiqueta_hex'
+                    'error': 'Parâmetros insuficientes. Forneça (local, antena, horario)'
                 }
             
             resultado = cursor.fetchone()
@@ -867,31 +519,26 @@ class GerenciadorPingRFID:
                     'error_type': 'not_found'
                 }
             
-            # Verificar se a foto existe
             if not resultado['Foto'] or len(resultado['Foto']) == 0:
                 return {
                     'success': False,
                     'error': 'Sem imagem no Banco de Dados',
                     'error_type': 'no_photo',
                     'horario': resultado['Horario'],
-                    'codigo_leitor': resultado['CodigoLeitor'],
-                    'antena': resultado['Antena'],
-                    'etiqueta': resultado['EtiquetaRFID_hex']
+                    'local': resultado['Local'],
+                    'antena': resultado['antena']
                 }
             
             return {
                 'success': True,
                 'foto': resultado['Foto'],
                 'horario': resultado['Horario'],
-                'codigo_leitor': resultado['CodigoLeitor'],
-                'antena': resultado['Antena'],
-                'etiqueta': resultado['EtiquetaRFID_hex']
+                'local': resultado['Local'],
+                'antena': resultado['antena']
             }
             
         except Exception as e:
             self.logger.error(f"Erro ao obter foto do PING: {e}")
-            self.logger.error(f"Query que causou erro: {query_check if 'query_check' in locals() else 'N/A'}")
-            self.logger.error(f"Parametros: codigo_leitor={codigo_leitor}, antena={antena}, horario={horario}, etiqueta_hex={etiqueta_hex}")
             return {
                 'success': False,
                 'error': str(e),
@@ -903,16 +550,14 @@ class GerenciadorPingRFID:
             if connection:
                 connection.close()
     
-    def verificar_foto_ping(self, codigo_leitor=None, antena=None, horario=None, etiqueta_hex=None):
+    def verificar_foto_ping(self, local=None, antena=None, horario=None):
         """
         Verifica se um PING possui foto disponível.
-        SIMPLIFICADO: apenas verifica se existe, não conta estatísticas.
         
         Args:
-            codigo_leitor (str): Código do leitor (preferencial)
-            antena (str): Número da antena (preferencial)
-            horario (str): Horário do PING (preferencial)
-            etiqueta_hex (str): Código da etiqueta (fallback)
+            local (str): Local do ping
+            antena (str): Número da antena
+            horario (str): Horário do PING
             
         Returns:
             dict: Informações sobre disponibilidade da foto
@@ -921,41 +566,21 @@ class GerenciadorPingRFID:
             connection = self._get_connection()
             cursor = connection.cursor(dictionary=True)
             
-            # Priorizar busca por CodigoLeitor + Antena + Horario
-            if codigo_leitor and antena and horario:
-                # Converter horário se vier em formato HTTP (GMT)
+            if local and antena and horario:
                 horario_sql = self._converter_horario_para_sql(horario)
                 
-                # Query SIMPLIFICADA: apenas verifica existência
                 query = """
                     SELECT 
                         1 as tem_foto,
                         Horario as ultima_foto
-                    FROM leitoresRFID
-                    WHERE CodigoLeitor = %s
-                      AND Antena = %s
+                    FROM pingsRFID
+                    WHERE Local = %s
+                      AND antena = %s
                       AND Horario = %s
-                      AND EtiquetaRFID_hex LIKE 'PING_PERIODICO_%'
                       AND Foto IS NOT NULL
                     LIMIT 1
                 """
-                cursor.execute(query, (codigo_leitor, antena, horario_sql))
-            
-            # Fallback: buscar por etiqueta (pega mais recente)
-            elif etiqueta_hex:
-                query = """
-                    SELECT 
-                        1 as tem_foto,
-                        Horario as ultima_foto
-                    FROM leitoresRFID
-                    WHERE EtiquetaRFID_hex = %s 
-                      AND EtiquetaRFID_hex LIKE 'PING_PERIODICO_%'
-                      AND Foto IS NOT NULL
-                    ORDER BY Horario DESC
-                    LIMIT 1
-                """
-                cursor.execute(query, (etiqueta_hex,))
-            
+                cursor.execute(query, (local, antena, horario_sql))
             else:
                 return {
                     'success': False,
@@ -963,7 +588,6 @@ class GerenciadorPingRFID:
                 }
             
             resultado = cursor.fetchone()
-            
             tem_foto = resultado is not None
             
             return {
@@ -971,16 +595,13 @@ class GerenciadorPingRFID:
                 'tem_foto': tem_foto,
                 'total_fotos': 1 if tem_foto else 0,
                 'ultima_foto': resultado['ultima_foto'] if resultado else None,
-                'codigo_leitor': codigo_leitor,
+                'local': local,
                 'antena': antena,
-                'horario': horario,
-                'etiqueta': etiqueta_hex
+                'horario': horario
             }
             
         except Exception as e:
             self.logger.error(f"Erro ao verificar foto do PING: {e}")
-            self.logger.error(f"Query que causou erro: {query if 'query' in locals() else 'N/A'}")
-            self.logger.error(f"Parametros: codigo_leitor={codigo_leitor}, antena={antena}, horario={horario}, etiqueta_hex={etiqueta_hex}")
             return {
                 'success': False,
                 'error': str(e),

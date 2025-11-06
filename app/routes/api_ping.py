@@ -15,7 +15,7 @@ def listar_pings():
     Query params:
         - limite: número de registros por página (padrão: 50)
         - offset: deslocamento
-        - etiqueta: filtro por código da etiqueta
+        - local: filtro por local (B1, B2, S1)
         - antena: filtro por antena
         - horario_inicio: filtro por data/hora inicial (formato: YYYY-MM-DD HH:MM:SS)
         - horario_fim: filtro por data/hora final (formato: YYYY-MM-DD HH:MM:SS)
@@ -45,8 +45,8 @@ def listar_pings():
         
         # Filtros
         filtros = {}
-        if request.args.get('etiqueta'):
-            filtros['etiqueta'] = request.args.get('etiqueta').strip()
+        if request.args.get('local'):
+            filtros['local'] = request.args.get('local').strip()
 
         if request.args.get('antena'):
             filtros['antena'] = request.args.get('antena').strip()
@@ -165,131 +165,10 @@ def obter_estatisticas_pings():
             'error': str(e)
         }), 500
 
-@api_ping_bp.route('/ping/etiqueta/<etiqueta_hex>', methods=['GET'])
-def obter_historico_ping(etiqueta_hex):
+@api_ping_bp.route('/ping/locais', methods=['GET'])
+def listar_locais():
     """
-    Obtém histórico de registros PING de uma etiqueta específica.
-    
-    Params:
-        - etiqueta_hex: código hexadecimal da etiqueta PING
-    
-    Query params:
-        - limite: número máximo de registros (padrão: 50, máx: 200)
-    """
-    try:
-        gerenciador = current_app.config.get('GERENCIADOR_PING')
-        if not gerenciador:
-            from ..utils.GerenciadorPingRFID import GerenciadorPingRFID
-            gerenciador = GerenciadorPingRFID.get_instance()
-            current_app.config['GERENCIADOR_PING'] = gerenciador
-        
-        try:
-            limite = int(request.args.get('limite', 50))
-            if limite > 200:
-                limite = 200
-        except ValueError:
-            limite = 50
-        
-        logger.info(f"Obtendo histórico do PING: {etiqueta_hex}")
-        
-        resultado = gerenciador.obter_pings_por_etiqueta(etiqueta_hex, limite)
-        
-        if not resultado.get('success', False):
-            return jsonify({
-                'success': False,
-                'error': resultado.get('error', 'Erro ao obter histórico')
-            }), 500
-        
-        return jsonify(resultado)
-    
-    except Exception as e:
-        logger.error(f"Erro ao obter histórico do PING: {str(e)}")
-        logger.error(f"Traceback: {traceback.format_exc()}")
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
-
-@api_ping_bp.route('/ping/ultimos/<int:minutos>', methods=['GET'])
-def obter_pings_recentes(minutos):
-    """
-    Obtém registros PING dos últimos X minutos.
-    
-    Params:
-        - minutos: número de minutos (máx: 1440 = 24 horas)
-    """
-    try:
-        # Limitar a 24 horas
-        if minutos > 1440:
-            minutos = 1440
-        
-        gerenciador = current_app.config.get('GERENCIADOR_PING')
-        if not gerenciador:
-            from ..utils.GerenciadorPingRFID import GerenciadorPingRFID
-            gerenciador = GerenciadorPingRFID.get_instance()
-            current_app.config['GERENCIADOR_PING'] = gerenciador
-        
-        # Calcular período
-        agora = datetime.now()
-        inicio = agora - timedelta(minutes=minutos)
-        
-        filtros = {
-            'horario_inicio': inicio.strftime('%Y-%m-%d %H:%M:%S'),
-            'horario_fim': agora.strftime('%Y-%m-%d %H:%M:%S')
-        }
-
-        # Reaplicar filtros opcionais
-        for chave in ('etiqueta', 'antena'):
-            val = request.args.get(chave)
-            if val:
-                filtros[chave] = val.strip()
-
-        # Obter parâmetros de paginação
-        try:
-            limite = int(request.args.get('limite', 100))
-            offset = int(request.args.get('offset', 0))
-            if limite > 200:
-                limite = 200
-        except ValueError:
-            limite = 100
-            offset = 0
-        
-        logger.info(f"Obtendo PINGs dos últimos {minutos} minutos")
-        
-        resultado = gerenciador.obter_pings(
-            filtros=filtros,
-            limite=limite,
-            offset=offset,
-            force_refresh=True  # Sempre atualizar para dados recentes
-        )
-        
-        if not resultado.get('success', False):
-            return jsonify({
-                'success': False,
-                'error': resultado.get('error', 'Erro ao obter PINGs recentes')
-            }), 500
-        
-        # Adicionar informação do período
-        resultado['periodo'] = {
-            'minutos': minutos,
-            'inicio': inicio.strftime('%Y-%m-%d %H:%M:%S'),
-            'fim': agora.strftime('%Y-%m-%d %H:%M:%S')
-        }
-        
-        return jsonify(resultado)
-    
-    except Exception as e:
-        logger.error(f"Erro ao obter PINGs recentes: {str(e)}")
-        logger.error(f"Traceback: {traceback.format_exc()}")
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
-
-@api_ping_bp.route('/ping/antenas', methods=['GET'])
-def listar_antenas():
-    """
-    Lista todas as antenas que registraram PINGs, agrupadas por leitor.
+    Lista todos os locais e antenas que registraram PINGs.
     """
     try:
         gerenciador = current_app.config.get('GERENCIADOR_PING')
@@ -300,33 +179,32 @@ def listar_antenas():
         
         force_refresh = request.args.get('force_refresh', '').lower() == 'true'
         
-        resultado = gerenciador.obter_antenas_com_leitor(force_refresh=force_refresh)
+        resultado = gerenciador.obter_locais_com_antena(force_refresh=force_refresh)
         
         if not resultado.get('success', False):
             return jsonify({
                 'success': False,
-                'error': resultado.get('error', 'Erro ao listar antenas')
+                'error': resultado.get('error', 'Erro ao listar locais')
             }), 500
         
         return jsonify(resultado)
     
     except Exception as e:
-        logger.error(f"Erro ao listar antenas PING: {str(e)}")
+        logger.error(f"Erro ao listar locais PING: {str(e)}")
         return jsonify({
             'success': False,
             'error': str(e)
         }), 500
 
-@api_ping_bp.route('/ping/foto/<string:etiqueta_hex>', methods=['GET'])
-def obter_foto_ping(etiqueta_hex):
+@api_ping_bp.route('/ping/foto', methods=['GET'])
+def obter_foto_ping_query():
     """
-    Obtém a foto de um PING específico.
+    Obtém a foto de um PING específico através de query params.
     
-    Params:
-        - etiqueta_hex: código hexadecimal da etiqueta PING (na URL)
-        - codigo_leitor: código do leitor (query param - preferencial)
-        - antena: número da antena (query param - preferencial)
-        - horario: horário do PING (query param - preferencial)
+    Query params:
+        - local: local do ping (B1, B2, S1) - obrigatório
+        - antena: número da antena - obrigatório
+        - horario: horário do PING - obrigatório
         
     Returns:
         - Imagem binária ou JSON com erro
@@ -338,17 +216,16 @@ def obter_foto_ping(etiqueta_hex):
             gerenciador = GerenciadorPingRFID.get_instance()
             current_app.config['GERENCIADOR_PING'] = gerenciador
         
-        # Obter parâmetros opcionais
-        codigo_leitor = request.args.get('codigo_leitor')
+        # Obter parâmetros obrigatórios
+        local = request.args.get('local')
         antena = request.args.get('antena')
         horario = request.args.get('horario')
         
-        # Chamar gerenciador com parâmetros apropriados
+        # Chamar gerenciador
         resultado = gerenciador.obter_foto_ping(
-            codigo_leitor=codigo_leitor,
+            local=local,
             antena=antena,
-            horario=horario,
-            etiqueta_hex=etiqueta_hex
+            horario=horario
         )
         
         if not resultado.get('success', False):
@@ -385,13 +262,13 @@ def obter_foto_ping(etiqueta_hex):
             foto_data,
             mimetype=content_type,
             headers={
-                'Content-Disposition': f'inline; filename="ping_{etiqueta_hex}.jpg"',
+                'Content-Disposition': f'inline; filename="ping_{local}_{antena}.jpg"',
                 'Cache-Control': 'public, max-age=3600'  # Cache por 1 hora
             }
         )
     
     except Exception as e:
-        logger.error(f"Erro ao obter foto do PING {etiqueta_hex}: {str(e)}")
+        logger.error(f"Erro ao obter foto do PING: {str(e)}")
         logger.error(f"Traceback: {traceback.format_exc()}")
         return jsonify({
             'success': False,
@@ -399,16 +276,15 @@ def obter_foto_ping(etiqueta_hex):
             'error_type': 'exception'
         }), 500
 
-@api_ping_bp.route('/ping/foto/info/<string:etiqueta_hex>', methods=['GET'])
-def verificar_foto_ping(etiqueta_hex):
+@api_ping_bp.route('/ping/foto/info', methods=['GET'])
+def verificar_foto_ping_query():
     """
-    Verifica se um PING possui foto disponível.
+    Verifica se um PING possui foto disponível através de query params.
     
-    Params:
-        - etiqueta_hex: código hexadecimal da etiqueta PING (na URL)
-        - codigo_leitor: código do leitor (query param - preferencial)
-        - antena: número da antena (query param - preferencial)
-        - horario: horário do PING (query param - preferencial)
+    Query params:
+        - local: local do ping - obrigatório
+        - antena: número da antena - obrigatório
+        - horario: horário do PING - obrigatório
         
     Returns:
         - JSON com informações sobre disponibilidade da foto
@@ -420,16 +296,15 @@ def verificar_foto_ping(etiqueta_hex):
             gerenciador = GerenciadorPingRFID.get_instance()
             current_app.config['GERENCIADOR_PING'] = gerenciador
         
-        # Obter parâmetros opcionais
-        codigo_leitor = request.args.get('codigo_leitor')
+        # Obter parâmetros obrigatórios
+        local = request.args.get('local')
         antena = request.args.get('antena')
         horario = request.args.get('horario')
         
         resultado = gerenciador.verificar_foto_ping(
-            codigo_leitor=codigo_leitor,
+            local=local,
             antena=antena,
-            horario=horario,
-            etiqueta_hex=etiqueta_hex
+            horario=horario
         )
         
         if not resultado.get('success', False):
@@ -441,7 +316,7 @@ def verificar_foto_ping(etiqueta_hex):
         return jsonify(resultado)
     
     except Exception as e:
-        logger.error(f"Erro ao verificar foto do PING {etiqueta_hex}: {str(e)}")
+        logger.error(f"Erro ao verificar foto do PING: {str(e)}")
         return jsonify({
             'success': False,
             'error': str(e)
@@ -460,11 +335,9 @@ def test_api_ping():
             'endpoints': [
                 '/ping',
                 '/ping/estatisticas',
-                '/ping/etiqueta/{hex}',
-                '/ping/ultimos/{minutos}',
-                '/ping/antenas',
-                '/ping/foto/{hex}',
-                '/ping/foto/info/{hex}'
+                '/ping/locais',
+                '/ping/foto',
+                '/ping/foto/info'
             ]
         })
     except Exception as e:
