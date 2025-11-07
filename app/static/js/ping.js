@@ -263,14 +263,21 @@ async function carregarEstatisticas(forceRefresh = false) {
     if (data.success && data.estatisticas) {
       const stats = data.estatisticas;
       
-      document.getElementById("totalPings").textContent = 
-        formatarNumero(stats.total_pings || 0);
+      const totalPingsEl = document.getElementById("totalPings");
+      const pingsComFotoEl = document.getElementById("pingsComFoto");
+      const ultimoPingEl = document.getElementById("ultimoPing");
       
-      document.getElementById("pingsComFoto").textContent = 
-        formatarNumero(stats.pings_com_foto || 0);
+      if (totalPingsEl) {
+        totalPingsEl.textContent = formatarNumero(stats.total_pings || 0);
+      }
       
-      document.getElementById("ultimoPing").textContent = 
-        stats.ultimo_ping_formatado || '--';
+      if (pingsComFotoEl) {
+        pingsComFotoEl.textContent = formatarNumero(stats.pings_com_foto || 0);
+      }
+      
+      if (ultimoPingEl) {
+        ultimoPingEl.textContent = stats.ultimo_ping_formatado || '--';
+      }
     }
   } catch (error) {
     console.error("Erro ao carregar estatísticas:", error);
