@@ -441,7 +441,7 @@ async function verFotoPing(local, antena, horario) {
     img.onload = function() {
       fotoLoading.style.display = "none";
       fotoContainer.innerHTML = `
-        <img src="${imageUrl}" alt="Foto do PING ${codigo}" class="foto-etiqueta" />
+        <img src="${imageUrl}" alt="Foto do PING - ${local} Antena ${antena}" class="foto-etiqueta" />
       `;
     };
     
