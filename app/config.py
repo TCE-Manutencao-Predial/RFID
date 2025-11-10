@@ -24,8 +24,8 @@ MYSQL_CONFIG = {
 }
 
 # Configuração dos diretórios de logs
-LOG_DIR = os.path.join(BASE_DIR, 'logs')
-LOG_FILE = os.path.join(LOG_DIR, 'rfid.log')
+LOG_DIR = '/var/softwaresTCE/logs/RFID'
+LOG_FILE = os.path.join(LOG_DIR, 'app.log')
 
 def setup_logging():
     """Configura o sistema de logging da aplicação."""
