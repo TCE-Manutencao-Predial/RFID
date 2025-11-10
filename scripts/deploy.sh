@@ -79,6 +79,11 @@ deploy_backend() {
     sudo chown -Rv $(whoami) $ROOT_BACKEND
     echo "[Deploy] Permissões do Backend ajustadas."
 
+    echo "[Deploy] Criando diretório centralizado de logs..."
+    sudo mkdir -p /var/softwaresTCE/logs/$PROJECT_NAME
+    sudo chown -R $(whoami) /var/softwaresTCE/logs/$PROJECT_NAME
+    echo "[Deploy] Diretório de logs criado: /var/softwaresTCE/logs/$PROJECT_NAME"
+
     if [ -e $ROOT_BACKEND/*.log ]; then
         echo "[Deploy] Ajustando permissões dos arquivos de log..."
         sudo chown -v tcego:tcego $ROOT_BACKEND/*.log
