@@ -1,4 +1,4 @@
-APP_NAME=rfid
+APP_NAME=RFID
 PORT=5074
 
 VENV_PYTHON=.venv/bin/python
@@ -38,7 +38,7 @@ undeploy:
 
 # Configurações do Servico
 # ----------------------------
-SERVICE_NAME=rfid
+SERVICE_NAME=RFID
 
 service-reload:
 	sudo systemctl daemon-reload
