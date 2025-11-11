@@ -10,6 +10,7 @@ ENV PYTHONUNBUFFERED=1 \
     APP_NAME=rfid \
     APP_PORT=5000
 
+# Dependências para mysql-connector-python
 RUN apk add --no-cache gcc musl-dev libffi-dev
 
 WORKDIR /app
